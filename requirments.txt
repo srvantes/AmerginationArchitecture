@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+sqlalchemy
+alembic
+pydantic
+fastapi-users
+celery
+redis
+ffmpeg-python
+moviepy
+opencv-python
+python-multipart
+python-jose[cryptography]
+passlib
+bcrypt
+httpx
+aiofiles
