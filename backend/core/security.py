@@ -49,7 +49,7 @@ ROLE_PERMISSIONS = {
 }
 
 async def get_current_user(db: AsyncSession) -> User:
-
+    pass
 
 async def check_permissions(user, permissions: str):
     if user.role not in ROLE_PERMISSIONS:
