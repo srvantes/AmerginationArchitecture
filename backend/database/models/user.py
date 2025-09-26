@@ -28,6 +28,7 @@ class User(Base):
     role = Column(String(20), default='user') # user, moder, admin
     is_verified = Column(Boolean, default=False)
     is_premium = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
 
     show_watchlist = Column(Boolean, default=False)
 

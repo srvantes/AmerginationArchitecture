@@ -16,3 +16,4 @@ bcrypt
 httpx
 aiofiles
 pydantic_settings
+pyjwt
