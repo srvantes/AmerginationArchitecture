@@ -77,6 +77,8 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
+
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
@@ -121,3 +123,10 @@ async def check_permissions(user, permissions: str):
             status_code=status.HTTP_403_FORBIDDEN, detail=f"Permission {permissions} required"
         )
 
+async def authenticate_user(user_, db: AsyncSession = Depends(get_db)):
+    user = await crud_user.get_by_email(db, email=user_.email)
+    if not user:
+        return False
+    if not verify_password(user.password, user.hashed_password):
+        return False
+    return user

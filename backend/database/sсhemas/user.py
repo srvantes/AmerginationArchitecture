@@ -33,12 +33,11 @@ class UserCreate(BaseUser):
     password: str = Field(..., min_length=8)
 
 
-
 class UserUpdate(BaseModel):
-    username: Optional[str] = None
+    nickname: Optional[str] = None
     bio: Optional[str] = None
     country: Optional[str] = None
-    show_username: Optional[bool] = None
+    show_nickname: Optional[bool] = None
     avatar_url: Optional[str] = None
     profile_background: Optional[str] = None
 
@@ -62,7 +61,7 @@ class UserProfile(BaseUser):
         from_attributes = True
 
 class UserAdmin(UserProfile):
-    email: EmailStr
+
     show_username: bool
     show_watchlist: bool
 
@@ -74,6 +73,13 @@ class UserStats(BaseModel):
 
 class UserInDB(BaseUser):
     hashed_password: str
+    id: int
+    created_at: datetime
+    last_online: datetime
+    role: str = "user"
+
+    class Config:
+        from_attributes = True
 
 
 class Token(BaseModel):
@@ -81,5 +87,5 @@ class Token(BaseModel):
     token_type: str
 
 class TokenData(BaseModel):
-
-    username: Optional[str] = None
+    user_id: Optional[int] = None
+    nickname: Optional[str] = None

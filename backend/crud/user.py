@@ -39,6 +39,16 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
     async def is_superuser(self, user: User) -> bool:
         return user.role == "admin"
 
+    async def create_user(self, user: UserCreate, db: AsyncSession) -> User:
+        db_obj = User(
+            hashed_password=user.hashed_password,
+            email=user.email,
+            username=user.username,
+        )
+
+        await db.add(db_obj)
+        await db.commit()
+        return db_obj
 
 '''    async def increment_profoile_views(self, db: AsyncSession, user_id: int) -> None:
         user = await self.get(db, user_id)
