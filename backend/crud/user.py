@@ -1,6 +1,7 @@
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
+
 
 
 from .base import CRUDBase
@@ -8,6 +9,9 @@ from ..database.models.user import User
 from ..database.sсhemas.user import UserCreate, UserUpdate
 
 class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
+    def __init__(self):
+        super().__init__(User)
+
     async def get_by_email(self, db: AsyncSession, email: str) -> Optional[User]:
         result = await db.execute(select(User).where(User.email == email))
         return result.scalar_one_or_none()
@@ -19,7 +23,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
     async def get_by_username_or_id(self, db: AsyncSession, identifier: str) -> Optional[User]:
         try:
             user_id = int(identifier)
-            return await db.get(db, user_id)
+            return await self.get(db, user_id)
         except ValueError:
             return await self.get_by_username(db, identifier)
 
@@ -33,7 +37,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
             return None
         return user
 
-    async def is_active_us(self, user: User) -> bool:
+    async def is_active_user(self, user: User) -> bool:
         return user.is_active
 
     async def is_superuser(self, user: User) -> bool:
@@ -49,6 +53,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         await db.add(db_obj)
         await db.commit()
         return db_obj
+
 
 '''    async def increment_profoile_views(self, db: AsyncSession, user_id: int) -> None:
         user = await self.get(db, user_id)

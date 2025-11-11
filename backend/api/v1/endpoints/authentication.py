@@ -7,13 +7,13 @@ from watchfiles import awatch
 
 from ....core.config import settings
 from ....core.database import get_db
-from ....database.sсhemas.user import UserCreate, UserProfile, Token
-from ....core.security import create_access_token, authenticate_user
+from ....database.sсhemas.user import UserCreate, BaseUser, Token
+from ....core.security import create_access_token, authenticate_user, get_current_user
 from ....crud.user import crud_user
 
 router = APIRouter(tags=["authentication"])
 
-@router.post("/login", response_model=UserCreate)
+@router.post("/register", response_model=UserCreate)
 async def register(
         user_data: UserCreate = Depends(UserCreate),
         db: AsyncSession = Depends(get_db),
@@ -25,10 +25,36 @@ async def register(
         )
 
 
-    if await crud_user.get_by_username(db, username=user_data.username):
+    if await crud_user.get_by_username_or_id(db, user_data.username):
         raise HTTPException(
             status_code=400,
             detail="Username already taken"
         )
 
     return crud_user.create(user_data, db)
+
+
+@router.post("/login", response_model=Token)
+async def login(
+        form_data: OAuth2PasswordRequestForm = Depends(),
+        db: AsyncSession = Depends(get_db),
+):
+    user = await crud_user.authenticate_user(db, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+        )
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username, "user_id": user.id},
+        expires_delta=access_token_expires
+    )
+
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@router.get("/me", response_model=BaseUser)
+async def read_users_me(
+        current_user: BaseUser = Depends(get_current_user),
+):
+    return current_user

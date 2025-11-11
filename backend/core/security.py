@@ -5,7 +5,7 @@ from typing import Annotated, Optional
 from enum import Enum
 import jwt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm, SecurityScopes
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm, SecurityScopes, HTTPBearer
 from jose import JWTError
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
@@ -68,6 +68,7 @@ ROLE_PERMISSIONS = {
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+security = HTTPBearer
 
 
 def verify_password(plain_password, hashed_password):
@@ -101,6 +102,7 @@ async def get_current_user(
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
         username: str = payload.get("sub")
+        user_id: int = payload.get("user_id")
         if username is None:
             raise credentials_exception
     except JWTError:

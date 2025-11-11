@@ -1,7 +1,8 @@
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-app = FastAPI(title="Amergination Architecture")
+from backend.api.v1.endpoints import authentication
+app = FastAPI(title="Amergination API")
 
 
 @app.get("/")
@@ -9,7 +10,7 @@ async def root():
     return {"message": "Hello World"}
 
 
-
+app.include_router(authentication.router, prefix="/api/v1/auth",tags=["authentication"])
 
 
 if __name__ == "__main__":

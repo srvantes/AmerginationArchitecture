@@ -7,7 +7,7 @@ class User(Base):
 
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(100), nullable=False)
 
@@ -15,7 +15,7 @@ class User(Base):
     profile_background = Column(String(255), default="/static/default_background.jpg")
     status = Column(String(20), default='online')
     custom_url = Column(String(255), unique=True)
-    nickname = Column(String(100), nullable=False)
+    nickname = Column(String(100))
     country = Column(String(100))
     bio = Column(Text)
 
