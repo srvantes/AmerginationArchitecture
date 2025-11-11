@@ -22,11 +22,10 @@ class Badge(BaseBadge):
 
 
 class BaseUser(BaseModel):
-
-    nickname: str = Field(..., min_length=3, max_length=40)
+    id: int
+    username: str = Field(..., min_length=3, max_length=40)
     email: EmailStr
-    avatar_url: Optional[str] = None
-    custom_url: Optional[str] = Field(None, regex=r"^[a-zA-Z0-9_-]+$")
+    nickname: Optional[str] = None
 
 
 class UserCreate(BaseUser):
@@ -34,7 +33,7 @@ class UserCreate(BaseUser):
 
 
 class UserUpdate(BaseModel):
-    nickname: Optional[str] = None
+    username: Optional[str] = None
     bio: Optional[str] = None
     country: Optional[str] = None
     show_nickname: Optional[bool] = None
@@ -56,6 +55,8 @@ class UserProfile(BaseUser):
     badges: List[Badge] = []
     created_at: datetime
     last_online: datetime
+    avatar_url: Optional[str] = None
+    custom_url: Optional[str] = Field(None, pattern=r"^[a-zA-Z0-9_-]+$")
 
     class Config():
         from_attributes = True
