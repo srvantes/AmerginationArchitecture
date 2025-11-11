@@ -7,7 +7,7 @@ from watchfiles import awatch
 
 from ....core.config import settings
 from ....core.database import get_db
-from ....database.sсhemas.user import UserCreate, BaseUser, Token
+from ....database.sсhemas.user import UserCreate, BaseUser, Token, UserLogin, UserProfile
 from ....core.security import create_access_token, authenticate_user, get_current_user
 from ....crud.user import crud_user
 
@@ -30,16 +30,16 @@ async def register(
             status_code=400,
             detail="Username already taken"
         )
-
-    return crud_user.create(user_data, db)
+    result = await crud_user.create_user(user_data, db)
+    return result
 
 
 @router.post("/login", response_model=Token)
 async def login(
-        form_data: OAuth2PasswordRequestForm = Depends(),
+        form_data: UserLogin = Depends(UserLogin),
         db: AsyncSession = Depends(get_db),
 ):
-    user = await crud_user.authenticate_user(db, form_data.username, form_data.password)
+    user = await crud_user.authenticate(db, form_data.login, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -53,8 +53,8 @@ async def login(
 
     return {"access_token": access_token, "token_type": "bearer"}
 
-@router.get("/me", response_model=BaseUser)
+@router.get("/me", response_model=UserProfile)
 async def read_users_me(
-        current_user: BaseUser = Depends(get_current_user),
+        current_user: UserProfile = Depends(get_current_user),
 ):
     return current_user

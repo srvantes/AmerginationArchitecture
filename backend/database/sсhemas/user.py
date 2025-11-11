@@ -22,13 +22,16 @@ class Badge(BaseBadge):
 
 
 class BaseUser(BaseModel):
-    id: int
     username: str = Field(..., min_length=3, max_length=40)
     email: EmailStr
     nickname: Optional[str] = None
 
 
 class UserCreate(BaseUser):
+    password: str = Field(..., min_length=8)
+
+class UserLogin(BaseModel):
+    login: str
     password: str = Field(..., min_length=8)
 
 
@@ -60,11 +63,6 @@ class UserProfile(BaseUser):
 
     class Config():
         from_attributes = True
-
-class UserAdmin(UserProfile):
-
-    show_username: bool
-    show_watchlist: bool
 
 
 class UserStats(BaseModel):

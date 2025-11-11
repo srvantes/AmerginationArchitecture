@@ -1,12 +1,14 @@
 from sqlalchemy import select
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
-
+import datetime
 
 
 from .base import CRUDBase
 from ..database.models.user import User
 from ..database.sсhemas.user import UserCreate, UserUpdate
+from ..core.password import get_password_hash
 
 class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
     def __init__(self):
@@ -20,6 +22,13 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         result = await db.execute(select(User).where(User.username == username))
         return result.scalar_one_or_none()
 
+    async def get_user_by_email_or_username(self, db: AsyncSession, login: str) -> Optional[User]:
+        from sqlalchemy import or_
+        result = await db.execute(
+            select(User).where(or_(User.email == login, User.username == login))
+        )
+        return result.scalar_one_or_none()
+
     async def get_by_username_or_id(self, db: AsyncSession, identifier: str) -> Optional[User]:
         try:
             user_id = int(identifier)
@@ -27,10 +36,10 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         except ValueError:
             return await self.get_by_username(db, identifier)
 
-    async def authenticate(self, db: AsyncSession, email: str, password: str) -> Optional[User]:
+    async def authenticate(self, db: AsyncSession, identifer: str, password: str) -> Optional[User]:
 
-        from ..core.security import verify_password
-        user = await self.get_by_email(db, email)
+        from ..core.password import verify_password
+        user = await self.get_user_by_email_or_username(db, identifer)
         if not user:
             return None
         if not verify_password(password, user.hashed_password):
@@ -45,12 +54,13 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
 
     async def create_user(self, user: UserCreate, db: AsyncSession) -> User:
         db_obj = User(
-            hashed_password=user.hashed_password,
+            hashed_password=get_password_hash(user.password),
             email=user.email,
             username=user.username,
+            created_at=datetime.datetime.utcnow(),
         )
 
-        await db.add(db_obj)
+        db.add(db_obj)
         await db.commit()
         return db_obj
 

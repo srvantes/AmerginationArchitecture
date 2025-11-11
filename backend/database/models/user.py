@@ -1,12 +1,14 @@
 from sqlalchemy import Table, Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey
 from sqlalchemy.sql import func
 from backend.core.database import Base
+from sqlalchemy.dialects.postgresql import UUID
+import uuid
 
 class User(Base):
     __tablename__ = "users"
 
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(100), nullable=False)
@@ -44,7 +46,7 @@ class UserBadge(Base):
     __tablename__ = "user_badges"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     badge_id = Column(Integer, ForeignKey("badges.id"))
 
 
@@ -63,4 +65,4 @@ class Badge(Base):
 class UserProfile(Base):
     __tablename__ = "user_profiles"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))

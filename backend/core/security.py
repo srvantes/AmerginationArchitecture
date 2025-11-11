@@ -10,7 +10,7 @@ from jose import JWTError
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from .password import verify_password
 
 
 from .database import get_db
@@ -71,17 +71,14 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 security = HTTPBearer
 
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def get_password_hash(password):
-    return pwd_context.hash(password)
-
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
+
+    if 'user_id' in to_encode and hasattr(to_encode['user_id'], 'hex'):
+        to_encode['user_id'] = str(to_encode['user_id'])
+
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
