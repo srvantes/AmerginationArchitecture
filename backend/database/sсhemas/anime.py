@@ -39,7 +39,7 @@ class CreateReview(BaseReviews):
 
 
 
-### ======== RESPONSE SHEMAS ======== ###
+'''### ======== RESPONSE SHEMAS ======== ###
 
 class Genre(BaseGenre):
     id: int
@@ -74,7 +74,9 @@ class Anime(BaseAnime):
 
     class Config:
         from_attributes = True
-
+'''
+class Wishlist(BaseModel):
+    id: int
 
 
 
