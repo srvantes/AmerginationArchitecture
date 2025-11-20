@@ -63,3 +63,20 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         await db.delete(obj)
         await db.commit()
         return obj
+
+    async def get_by_filter(
+            self,
+            db: AsyncSession,
+            model,
+            **filters: Dict[str, Any],
+    ):
+        filters = {k: v for k, v in filters.items() if v is not None}
+
+        query = select(model)
+
+        for field, value in filters.items():
+            if hasattr(model, field):
+                query = query.where(getattr(model, field) == value)
+
+        result = await db.execute(query)
+        return result.scalars().all()

@@ -29,7 +29,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         )
         return result.scalar_one_or_none()
 
-    async def get_by_username_or_id(self, db: AsyncSession, identifier: str) -> Optional[User]:
+    async def get_by_username_or_email(self, db: AsyncSession, identifier: str) -> Optional[User]:
         try:
             user_id = int(identifier)
             return await self.get(db, user_id)

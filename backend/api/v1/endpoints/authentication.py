@@ -15,7 +15,7 @@ router = APIRouter(tags=["authentication"])
 
 @router.post("/register", response_model=UserCreate)
 async def register(
-        user_data: UserCreate = Depends(UserCreate),
+        user_data: UserCreate,
         db: AsyncSession = Depends(get_db),
 ):
     if await crud_user.get_by_email(db, email=user_data.email):
@@ -36,7 +36,7 @@ async def register(
 
 @router.post("/login", response_model=Token)
 async def login(
-        form_data: UserLogin = Depends(UserLogin),
+        form_data: UserLogin,
         db: AsyncSession = Depends(get_db),
 ):
     user = await crud_user.authenticate(db, form_data.login, form_data.password)

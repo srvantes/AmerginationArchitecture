@@ -22,7 +22,7 @@ class BaseAnime(BaseModel):
 class BaseReviews(BaseModel):
     text: str = Field(..., min_length=1, max_length=6000)
     rating: Optional[float] = Field(ge=0, le=10)
-
+    anime_title: Optional[str] = Field(None, min_length=1, max_length=50)
 
 
 ### ======== CREATE SHEMAS ======== ###
