@@ -1,10 +1,9 @@
-from fastapi import Depends, APIRouter, HTTPException, status
+from fastapi import Depends, APIRouter, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import timedelta
 
-from watchfiles import awatch
-
+from backend.database.redis_client import redis_client
 from ....core.config import settings
 from ....core.database import get_db
 from ....database.sсhemas.user import UserCreate, BaseUser, Token, UserLogin, UserProfile
@@ -58,3 +57,23 @@ async def read_users_me(
         current_user: UserProfile = Depends(get_current_user),
 ):
     return current_user
+
+
+@router.get("/logout")
+async def logout(
+        authorization: str = Header(...),
+):
+    token = authorization.replace("Bearer ", "")
+
+    from datetime import datetime, timedelta
+    import jwt
+
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        exp = payload.get("exp")
+        if exp:
+            ttl = exp - int(datetime.utcnow().timestamp())
+            if ttl > 0:
+                await redis_client.setex(f"blacklist:{token}", ttl, "true")
+    except jwt.ExpiredSignatureError:
+        pass

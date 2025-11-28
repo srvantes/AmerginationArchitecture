@@ -4,7 +4,7 @@ from typing import Annotated, Optional
 
 from enum import Enum
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm, SecurityScopes, HTTPBearer
 from jose import JWTError
 from jwt.exceptions import InvalidTokenError
@@ -12,7 +12,7 @@ from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from .password import verify_password
 
-
+from ..database.redis_client import redis_client
 from .database import get_db
 from backend.database.models.user import User
 from .config import get_settings
@@ -71,7 +71,12 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 security = HTTPBearer
 
 
-
+async def verify_token_not_blacklisted(authorization: str = Header(...)):
+    token = authorization.replace("Bearer ", "")
+    is_blacklisted = await redis_client.get(f"blacklist:{token}")
+    if is_blacklisted:
+        raise HTTPException(status_code=401, detail="Token has been revoked")
+    return token
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
