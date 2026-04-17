@@ -12,7 +12,7 @@ from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from .password import verify_password
 
-from ..database.redis_client import redis_client
+#from ..database.redis_client import redis_client
 from .database import get_db
 from backend.database.models.user import User
 from .config import get_settings

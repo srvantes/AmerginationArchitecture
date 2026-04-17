@@ -1,4 +1,5 @@
 from sqlalchemy import Table, Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from backend.core.database import Base
 from sqlalchemy.dialects.postgresql import UUID
@@ -36,6 +37,12 @@ class User(Base):
 
     created_at = Column(DateTime, server_default=func.now())
     last_online = Column(DateTime, server_default=func.now())
+
+
+    # Relationships
+
+    review = relationship("Review", back_populates="users")
+
 
 
     def __repr__(self):

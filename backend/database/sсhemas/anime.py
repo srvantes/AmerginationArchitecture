@@ -1,8 +1,12 @@
 from typing import List, Optional
-
+from uuid import UUID as PydanticUUID
 
 from pydantic import BaseModel, Field
 from datetime import datetime
+
+from pydantic.v1 import UUID1
+
+from backend.database.sсhemas.user import BaseUser
 
 
 ### ======== BASE SHEMAS ======== ###
@@ -11,30 +15,36 @@ class BaseGenre(BaseModel):
 
 
 class BaseAnime(BaseModel):
+    id: PydanticUUID
     title: Optional[str] = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     episodes: Optional[int] = Field(None, ge=0)
     seasons: Optional[int] = Field(None, ge=0)
-    status: Optional[str] = Field('ongoing', regex='^(ongoing|completed|announced)$')
-    release_date: Optional[datetime.year] = Field(None, ge=0)
-    rating: Optional[float] = Field(ge=0, le=10, description="Rating must be between 0 and 10")
+    status: Optional[str] = Field(default='ongoing', pattern='^(ongoing|completed|announced)$')
+    release_date: Optional[datetime] = Field(None)
+    rating: Optional[float] = Field(None, ge=0, le=10, description="Rating must be between 0 and 10")
+    api_url: Optional[str] = Field(None, min_length=1, max_length=200)
 
 class BaseReviews(BaseModel):
+    anime: BaseAnime.id
+    user: BaseUser.username
     text: str = Field(..., min_length=1, max_length=6000)
-    rating: Optional[float] = Field(ge=0, le=10)
+    rating: Optional[float] = Field(None, ge=0, le=10)
     anime_title: Optional[str] = Field(None, min_length=1, max_length=50)
+    date: Optional[datetime] = Field(None)
 
 
 ### ======== CREATE SHEMAS ======== ###
 #(without id)
 class CreateGenre(BaseGenre):
-    pass
+    class config:
+        orm_mode = True
 
 class CreateAnime(BaseAnime):
     genres: List[CreateGenre] = []
 
 class CreateReview(BaseReviews):
-    anime_id: int
+    pass
 
 
 

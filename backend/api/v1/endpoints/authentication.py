@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import timedelta
 
-from backend.database.redis_client import redis_client
+#from backend.database.redis_client import redis_client
 from ....core.config import settings
 from ....core.database import get_db
 from ....database.sсhemas.user import UserCreate, BaseUser, Token, UserLogin, UserProfile
