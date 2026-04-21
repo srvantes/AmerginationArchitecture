@@ -3,6 +3,7 @@ from sqlalchemy.sql import func
 from datetime import datetime
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
+
 import uuid
 
 
@@ -39,7 +40,7 @@ class Review(Base):
     __tablename__ = 'reviews'
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     text = Column(String(1500), nullable=False)
     anime_title = Column(String(200), nullable=False)
     anime_id = Column(Integer, ForeignKey('anime.id'), nullable=False)
@@ -47,7 +48,7 @@ class Review(Base):
     date = Column(DateTime, default=datetime.now)
 
     # Отношения
-    user = relationship("User", back_populates="reviews")
+#    user = relationship("User", back_populates="reviews")
     anime = relationship("Anime", back_populates="reviews")
 
 class news(Base):

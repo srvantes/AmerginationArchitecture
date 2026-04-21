@@ -26,8 +26,8 @@ class BaseAnime(BaseModel):
     api_url: Optional[str] = Field(None, min_length=1, max_length=200)
 
 class BaseReviews(BaseModel):
-    anime: BaseAnime.id
-    user: BaseUser.username
+    anime: BaseAnime
+    user: BaseUser
     text: str = Field(..., min_length=1, max_length=6000)
     rating: Optional[float] = Field(None, ge=0, le=10)
     anime_title: Optional[str] = Field(None, min_length=1, max_length=50)

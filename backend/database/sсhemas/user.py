@@ -24,7 +24,7 @@ class Badge(BaseBadge):
 class BaseUser(BaseModel):
     username: str = Field(..., min_length=3, max_length=40)
     email: EmailStr
-    nickname: Optional[str] = None
+
 
 
 class UserCreate(BaseUser):

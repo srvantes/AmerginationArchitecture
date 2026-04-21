@@ -3,7 +3,9 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from backend.core.database import Base
 from sqlalchemy.dialects.postgresql import UUID
+
 import uuid
+
 
 class User(Base):
     __tablename__ = "users"
@@ -41,8 +43,8 @@ class User(Base):
 
     # Relationships
 
-    review = relationship("Review", back_populates="users")
-
+#    review = relationship("Review", back_populates="user")
+#    anime = relationship("Anime", back_populates="user")
 
 
     def __repr__(self):
