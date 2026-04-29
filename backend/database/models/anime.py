@@ -23,14 +23,14 @@ class Anime(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=datetime.now)
     api_url = Column(String(200), nullable=False)
-    reviews = Column(Integer, default=0)
+    #reviews = Column(Integer, default=0)
 
     voice_acting = Column(String(20), nullable=False)
     type = Column(String(20), nullable=False)
 
     # отношения
 
-    review = relationship("Review", back_populates="anime")
+    #reviews = relationship("Review", back_populates="anime")
 
     def __repr__(self):
         return f'<Anime(id={self.id}, title={self.title})>'
@@ -48,8 +48,8 @@ class Review(Base):
     date = Column(DateTime, default=datetime.now)
 
     # Отношения
-#    user = relationship("User", back_populates="reviews")
-    anime = relationship("Anime", back_populates="reviews")
+    #user = relationship("User", back_populates="reviews")
+    #anime = relationship("Anime", back_populates="reviews")
 
 class news(Base):
     __tablename__ = 'news'

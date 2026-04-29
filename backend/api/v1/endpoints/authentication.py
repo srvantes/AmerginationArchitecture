@@ -1,22 +1,24 @@
-from fastapi import Depends, APIRouter, HTTPException, status, Header
+from fastapi import Depends, APIRouter, HTTPException, status, Header, Security
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import timedelta
+from redis.asyncio import Redis
 
 #from backend.database.redis_client import redis_client
 from ....core.config import settings
 from ....core.database import get_db
-from ....database.sсhemas.user import UserCreate, BaseUser, Token, UserLogin, UserProfile
-from ....core.security import create_access_token, authenticate_user, get_current_user
+from ....core.redis import get_redis_client
+from ....database.sсhemas.user import UserCreate, BaseUser, Token, UserLogin, UserProfile, UserOut
+from ....core.security import create_access_token, authenticate_user, get_current_user, oauth2_scheme
 from ....crud.user import crud_user
 
 router = APIRouter(tags=["authentication"])
 
-@router.post("/register", response_model=UserCreate)
+@router.post("/register", response_model=UserOut)
 async def register(
         user_data: UserCreate,
         db: AsyncSession = Depends(get_db),
-):
+) -> UserOut:
     if await crud_user.get_by_email(db, email=user_data.email):
         raise HTTPException(
             status_code=400,
@@ -24,7 +26,7 @@ async def register(
         )
 
 
-    if await crud_user.get_by_username_or_id(db, user_data.username):
+    if await crud_user.get_by_username(db, user_data.username):
         raise HTTPException(
             status_code=400,
             detail="Username already taken"
@@ -38,7 +40,7 @@ async def login(
         form_data: UserLogin,
         db: AsyncSession = Depends(get_db),
 ):
-    user = await crud_user.authenticate(db, form_data.login, form_data.password)
+    user = await crud_user.authenticate(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -59,11 +61,13 @@ async def read_users_me(
     return current_user
 
 
-@router.get("/logout")
+@router.post("/logout")
 async def logout(
-        authorization: str = Header(...),
+        token: str = Security(oauth2_scheme),
+        current_user: BaseUser = Depends(get_current_user),
+        redis_client: Redis = Depends(get_redis_client)
 ):
-    token = authorization.replace("Bearer ", "")
+
 
     from datetime import datetime, timedelta
     import jwt

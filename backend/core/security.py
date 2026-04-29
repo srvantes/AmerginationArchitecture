@@ -17,6 +17,7 @@ from .database import get_db
 from backend.database.models.user import User
 from .config import get_settings
 from ..crud import crud_user
+from .redis import redis_client
 
 Settings = get_settings()
 SECRET_KEY = Settings.SECRET_KEY
@@ -110,7 +111,7 @@ async def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    user = await crud_user.get_by_username_or_id(db, username)
+    user = await crud_user.get_by_username(db, username)
     if user is None:
         raise credentials_exception
     return user

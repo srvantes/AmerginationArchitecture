@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +15,11 @@ from ..core.password import get_password_hash
 class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
     def __init__(self):
         super().__init__(User)
+    async def get_by_id(self, db, id: UUID) -> Optional[User]:
+        result = await db.execute(
+            select(User).where(User.id == id)
+        )
+        return await result
 
     async def get_by_email(self, db: AsyncSession, email: str) -> Optional[User]:
         result = await db.execute(select(User).where(User.email == email))
