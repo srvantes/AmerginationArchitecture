@@ -57,7 +57,7 @@ async def login(
 @router.get("/me", response_model=UserProfile)
 async def read_users_me(
         current_user: UserProfile = Depends(get_current_user),
-):
+) -> UserProfile:
     return current_user
 
 

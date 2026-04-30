@@ -53,8 +53,7 @@ class UserUpdate(BaseModel):
 
 
 class UserProfile(BaseUser):
-    id: int
-    real_name: Optional[str] = None
+    id: UUID
     bio: Optional[str] = None
     country: Optional[str] = None
     status: str
