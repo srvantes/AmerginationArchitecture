@@ -44,10 +44,12 @@ class CreateAnime(BaseAnime):
     genres: List[CreateGenre] = []
 
 class CreateReview(BaseReviews):
-    pass
+    text: str
+    rating: float | None = None
 
 
-
+class UpdateReview(BaseReviews):
+    text: Optional[str]
 
 '''### ======== RESPONSE SHEMAS ======== ###
 

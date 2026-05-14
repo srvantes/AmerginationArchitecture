@@ -25,7 +25,8 @@ class Badge(BaseBadge):
 class BaseUser(BaseModel):
     username: str = Field(..., min_length=3, max_length=40)
     email: EmailStr
-
+    class Config:
+        from_attributes = True
 
 
 class UserCreate(BaseUser):
@@ -95,3 +96,13 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     user_id: Optional[int] = None
     nickname: Optional[str] = None
+
+class UserProfileUpdate(BaseModel):
+    avatar_url: Optional[str] = None
+    profile_background: Optional[str] = None
+    status: Optional[str] = Field(None, max_length=20)
+    custom_url: Optional[str] = Field(None, pattern=r"^[a-zA-Z0-9_-]+$", max_length=50)
+    nickname: Optional[str] = Field(None, max_length=100)
+    country: Optional[str] = Field(None, max_length=100)
+    bio: Optional[str] = Field(None, max_length=1000)
+    show_watchlist: Optional[bool] = None

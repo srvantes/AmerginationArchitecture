@@ -12,6 +12,7 @@ from ....database.sсhemas.user import UserCreate, BaseUser, Token, UserLogin, U
 from ....core.security import create_access_token, authenticate_user, get_current_user, oauth2_scheme
 from ....crud.user import crud_user
 
+
 router = APIRouter(tags=["authentication"])
 
 @router.post("/register", response_model=UserOut)
@@ -31,8 +32,13 @@ async def register(
             status_code=400,
             detail="Username already taken"
         )
-    result = await crud_user.create_user(user_data, db)
-    return result
+    user_db = await crud_user.create_user(user_data, db)
+    await crud_user.create_base_profile(user_db.id)
+
+    await db.commit()
+    await db.refresh(user_db)
+
+    return user_db
 
 
 @router.post("/login", response_model=Token)

@@ -1,3 +1,4 @@
+from http.client import HTTPException
 from uuid import UUID
 
 from sqlalchemy import select
@@ -8,8 +9,8 @@ import datetime
 
 
 from .base import CRUDBase
-from ..database.models.user import User
-from ..database.sсhemas.user import UserCreate, UserUpdate
+from ..database.models.user import User, UserProfile
+from ..database.sсhemas.user import UserCreate, UserUpdate, UserProfileUpdate
 from ..core.password import get_password_hash
 
 class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
@@ -36,7 +37,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         )
         return result.scalar_one_or_none()
 
-    async def get_by_username_or_email(self, db: AsyncSession, identifier: str) -> Optional[User]:
+    async def get_by_username_or_id(self, db: AsyncSession, identifier: str) -> Optional[User]:
         try:
             user_id = int(identifier)
             return await self.get(db, user_id)
@@ -71,11 +72,58 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         await db.commit()
         return db_obj
 
+    async def get_user_profile(self, user_id: UUID, db: AsyncSession) -> Optional[UserProfile]:
 
-'''    async def increment_profoile_views(self, db: AsyncSession, user_id: int) -> None:
-        user = await self.get(db, user_id)
-        if user:
-            user.pro
-'''
+        user_profile = await db.execute(
+            select(UserProfile).where(User.id == user_id)
+        )
+
+        return user_profile.scalar_one_or_none()
+
+    async def create_base_profile(self, user_id: UUID, db: AsyncSession) -> Optional[UserProfile]:
+        existing = await db.execute(
+            select(UserProfile).where(User.id == user_id)
+        )
+        if existing.scalar_one_or_none():
+            return None
+
+        profile = UserProfile(user_id=user_id)
+        db.add(profile)
+
+        await db.flush()
+        await db.refresh(profile)
+
+        return profile
+
+
+    async def update_profile(self, db: AsyncSession, user_id: UUID, profile_data: UserProfileUpdate) -> UserProfile:
+        result = await db.execute(
+            select(UserProfile).where(User.id == user_id)
+        )
+        profile = result.scalar_one_or_none()
+
+        if not profile:
+            raise ValueError("Profile not found")
+
+        update_dict = profile_data.model_dump(exclude=True)
+
+        if "custom_url" in update_dict and update_dict["custom_url"] is not None:
+            existing = await db.execute(
+                select(UserProfile).where(
+                    UserProfile.custom_url == update_dict["custom_url"],
+                    UserProfile.user_id != user_id,
+                )
+            )
+            if existing.scalar_one_or_none():
+                raise ValueError("Custom_url already taken")
+
+        for field, value in update_dict.items():
+            setattr(profile, field, value)
+
+        await db.commit()
+        await db.refresh(profile)
+        return profile
+
+
 crud_user = CRUDUser()
 
