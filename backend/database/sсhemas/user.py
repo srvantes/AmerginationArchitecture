@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from uuid import UUID
+from uuid import UUID as PydanticUUID
 
 from pydantic import BaseModel, EmailStr, Field
 from typing import List
@@ -33,7 +33,7 @@ class UserCreate(BaseUser):
     password: str = Field(..., min_length=8)
 
 class UserOut(BaseModel):
-    id: UUID
+    id: PydanticUUID
     username: str
     email: EmailStr
     class Config:
@@ -54,7 +54,7 @@ class UserUpdate(BaseModel):
 
 
 class UserProfile(BaseUser):
-    id: UUID
+    id: PydanticUUID
     bio: Optional[str] = None
     country: Optional[str] = None
     status: str
@@ -80,7 +80,7 @@ class UserStats(BaseModel):
 
 class UserInDB(BaseUser):
     hashed_password: str
-    id: int
+    id: PydanticUUID
     created_at: datetime
     last_online: datetime
     role: str = "user"

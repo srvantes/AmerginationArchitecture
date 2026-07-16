@@ -1,4 +1,4 @@
-from http.client import HTTPException
+from fastapi import HTTPException
 from uuid import UUID
 
 from fastapi.openapi.utils import status_code_ranges
@@ -11,10 +11,10 @@ import datetime
 from .anime import CRUDAnime
 from .base import CRUDBase
 from ..database.models.anime import Review
-from ..database.sсhemas.anime import BaseAnime, BaseReviews, BaseGenre, UpdateReview
+from ..database.sсhemas.anime import BaseReviews, CreateReview, UpdateReview
 
 
-class CRUDReview(CRUDAnime[BaseAnime, BaseReviews, BaseGenre]):
+class CRUDReview(CRUDAnime[Review, CreateReview, UpdateReview]):
     def __init__(self, ):
         super().__init__(Review)
 

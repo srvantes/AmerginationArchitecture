@@ -59,7 +59,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def remove(self, db: AsyncSession, *, id: int) -> ModelType:
         result = await db.execute(select(self.model).filter_by(id=id))
-        obj = result.scalar_one()
+        obj = result.scalar_one_or_none()
         await db.delete(obj)
         await db.commit()
         return obj

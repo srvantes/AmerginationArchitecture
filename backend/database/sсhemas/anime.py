@@ -13,9 +13,7 @@ from backend.database.sсhemas.user import BaseUser
 class BaseGenre(BaseModel):
     name: Optional[str] = Field(..., min_length=1, max_length=50)
 
-
-class BaseAnime(BaseModel):
-    id: PydanticUUID
+class AnimeResponse(BaseModel):
     title: Optional[str] = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     episodes: Optional[int] = Field(None, ge=0)
@@ -23,26 +21,22 @@ class BaseAnime(BaseModel):
     status: Optional[str] = Field(default='ongoing', pattern='^(ongoing|completed|announced)$')
     release_date: Optional[datetime] = Field(None)
     rating: Optional[float] = Field(None, ge=0, le=10, description="Rating must be between 0 and 10")
+
+class BaseAnimeDB(BaseModel):
+    id: PydanticUUID
     api_url: Optional[str] = Field(None, min_length=1, max_length=200)
 
 class BaseReviews(BaseModel):
-    anime: BaseAnime
-    user: BaseUser
+    id: PydanticUUID
+    anime: PydanticUUID
+    user: PydanticUUID
     text: str = Field(..., min_length=1, max_length=6000)
     rating: Optional[float] = Field(None, ge=0, le=10)
     anime_title: Optional[str] = Field(None, min_length=1, max_length=50)
     date: Optional[datetime] = Field(None)
 
 
-### ======== CREATE SHEMAS ======== ###
-#(without id)
-class CreateGenre(BaseGenre):
-    class config:
-        orm_mode = True
-
-class CreateAnime(BaseAnime):
-    genres: List[CreateGenre] = []
-
+### ======== CREATE SHEMAS ======== ##
 class CreateReview(BaseReviews):
     text: str
     rating: float | None = None
@@ -88,7 +82,7 @@ class Anime(BaseAnime):
         from_attributes = True
 '''
 class Wishlist(BaseModel):
-    id: int
+    id: PydanticUUID
 
 
 

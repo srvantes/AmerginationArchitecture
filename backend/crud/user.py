@@ -1,4 +1,4 @@
-from http.client import HTTPException
+from fastapi import HTTPException
 from uuid import UUID
 
 from sqlalchemy import select
@@ -20,7 +20,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         result = await db.execute(
             select(User).where(User.id == id)
         )
-        return await result
+        return await result.scalar_one_or_none()
 
     async def get_by_email(self, db: AsyncSession, email: str) -> Optional[User]:
         result = await db.execute(select(User).where(User.email == email))
@@ -70,19 +70,20 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
 
         db.add(db_obj)
         await db.commit()
+        await db.refresh(db_obj)
         return db_obj
 
     async def get_user_profile(self, user_id: UUID, db: AsyncSession) -> Optional[UserProfile]:
 
         user_profile = await db.execute(
-            select(UserProfile).where(User.id == user_id)
+            select(UserProfile).where(UserProfile.id == user_id)
         )
 
         return user_profile.scalar_one_or_none()
 
     async def create_base_profile(self, user_id: UUID, db: AsyncSession) -> Optional[UserProfile]:
         existing = await db.execute(
-            select(UserProfile).where(User.id == user_id)
+            select(UserProfile).where(UserProfile.id == user_id)
         )
         if existing.scalar_one_or_none():
             return None
@@ -98,14 +99,14 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
 
     async def update_profile(self, db: AsyncSession, user_id: UUID, profile_data: UserProfileUpdate) -> UserProfile:
         result = await db.execute(
-            select(UserProfile).where(User.id == user_id)
+            select(UserProfile).where(UserProfile.id == user_id)
         )
         profile = result.scalar_one_or_none()
 
         if not profile:
             raise ValueError("Profile not found")
 
-        update_dict = profile_data.model_dump(exclude=True)
+        update_dict = profile_data.model_dump(exclude_unset=True)
 
         if "custom_url" in update_dict and update_dict["custom_url"] is not None:
             existing = await db.execute(

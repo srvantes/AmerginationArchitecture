@@ -20,7 +20,7 @@ class User(Base):
 
 
     # Relationships
-
+    profile = relationship("UserProfile", backref="user", uselist=False)
 #    review = relationship("Review", back_populates="user")
 #    anime = relationship("Anime", back_populates="user")
 
@@ -49,9 +49,9 @@ class Badge(Base):
 
 
 
-class UserProfile(User):
+class UserProfile(Base):
     __tablename__ = "user_profiles"
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    id = Column(UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True)
     avatar_url = Column(String(255), default="/static/default_avatar.jpg")
     profile_background = Column(String(255), default="/static/default_background.jpg")
     status = Column(String(20), default='online')

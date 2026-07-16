@@ -30,10 +30,10 @@ class Review(Base):
     __tablename__ = 'reviews'
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
     text = Column(String(1500), nullable=False)
     anime_title = Column(String(200), nullable=False)
-    anime_id = Column(Integer, ForeignKey('anime.id'), nullable=False)
+    anime_id = Column(UUID(as_uuid=True), ForeignKey('anime.id'), nullable=False)
     anime_rating = Column(Float, default=0.0)
     date = Column(DateTime, default=datetime.now)
 
