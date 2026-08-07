@@ -1,3 +1,4 @@
+from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,20 +8,20 @@ import datetime
 
 from .base import CRUDBase
 from ..database.models.anime import Anime
-from ..database.sсhemas.anime import BaseAnime
+from ..database.sсhemas.anime import BaseAnimeDB, AnimeResponse
 
 
-class CRUDAnime(CRUDBase[BaseAnime, Anime]):
+class CRUDAnime(CRUDBase[Anime, BaseAnimeDB, AnimeResponse]):
     def __init__(self):
         super().__init__(Anime)
 
-    async def get_anime_by_id(self, db: AsyncSession, id: int) -> Optional[BaseAnime]:
-        result = await db.execute(select(BaseAnime).where(BaseAnime.id == id))
+    async def get_anime_by_id(self, db: AsyncSession, id: UUID) -> Optional[BaseAnimeDB]:
+        result = await db.execute(select(BaseAnimeDB).where(BaseAnimeDB.id == id))
         return result.scalar_one_or_none()
 
 
-    async def get_anime_by_name(self, db: AsyncSession, name: str) -> Optional[BaseAnime]:
-        result = await db.execute(select(BaseAnime).where(BaseAnime.title == name))
+    async def get_anime_by_name(self, db: AsyncSession, name: str) -> Optional[BaseAnimeDB]:
+        result = await db.execute(select(BaseAnimeDB).where(AnimeResponse.title == name))
         return result.scalar_one_or_none()
 
     async def get_anime_by_filter(

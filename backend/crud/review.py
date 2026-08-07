@@ -8,13 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List, Any, Dict
 import datetime
 
-from .anime import CRUDAnime
+
 from .base import CRUDBase
 from ..database.models.anime import Review
 from ..database.sсhemas.anime import BaseReviews, CreateReview, UpdateReview
 
 
-class CRUDReview(CRUDAnime[Review, CreateReview, UpdateReview]):
+class CRUDReview(CRUDBase[Review, CreateReview, UpdateReview]):
     def __init__(self, ):
         super().__init__(Review)
 

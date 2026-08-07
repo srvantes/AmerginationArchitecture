@@ -7,7 +7,7 @@ from redis.asyncio import Redis
 #from backend.database.redis_client import redis_client
 from ....core.config import settings
 from ....core.database import get_db
-from ....core.redis import get_redis_client
+from ....core.redis import redis_client
 from ....database.sсhemas.user import UserCreate, BaseUser, Token, UserLogin, UserProfile, UserOut
 from ....core.security import create_access_token, authenticate_user, get_current_user, oauth2_scheme
 from ....crud.user import crud_user
@@ -71,7 +71,7 @@ async def read_users_me(
 async def logout(
         token: str = Security(oauth2_scheme),
         current_user: BaseUser = Depends(get_current_user),
-        redis_client: Redis = Depends(get_redis_client)
+
 ):
 
 

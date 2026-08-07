@@ -2,9 +2,19 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from backend.api.v1.endpoints import authentication, users, anime, news, profile, reviews
+from contextlib import asynccontextmanager
 
-app = FastAPI(title="Amergination")
+from backend.core.redis import close_redis
 
+
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await close_redis()
+
+app = FastAPI(lifespan=lifespan, title="Amergination")
 
 
 
@@ -16,7 +26,6 @@ app.include_router(anime.router, prefix="/api/v1/anime",tags=["anime"])
 app.include_router(profile.router, prefix="/api/v1/profile",tags=["profile"])
 
 app.include_router(reviews.router, prefix="/api/v1/reviews",tags=["reviews"])
-
 
 
 if __name__ == "__main__":

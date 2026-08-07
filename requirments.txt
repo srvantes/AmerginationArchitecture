@@ -17,3 +17,4 @@ httpx
 aiofiles
 pydantic_settings
 pyjwt
+httpx

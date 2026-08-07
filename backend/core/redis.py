@@ -4,17 +4,17 @@ from fastapi import Depends
 
 from .config import settings
 
-async def get_redis_client() -> AsyncGenerator[Redis, None]:
-    redis_client = Redis(
-        host=settings.REDIS_HOST,
-        port=settings.REDIS_PORT,
-        password=settings.REDIS_PASSWORD,
-        db=settings.REDIS_DB,
-        decode_responses=True
-    )
-    try:
-        yield redis_client
-    finally:
-        await redis_client.close()
+#   print("🚨🚨🚨 ЗАГРУЖАЮ REDIS С ПАРОЛЕМ: None 🚨🚨🚨")
+redis_client = Redis(
+    host=settings.REDIS_HOST,
+    port=settings.REDIS_PORT,
+    password=settings.REDIS_PASSWORD or None,
+    db=settings.REDIS_DB,
+    decode_responses=True,
+    max_connections=settings.REDIS_MAX_CONNECTIONS,
+)
 
-redis_client = Redis()
+
+async def close_redis():
+    await redis_client.close()
+
