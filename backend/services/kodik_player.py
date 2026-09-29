@@ -1,7 +1,7 @@
 
-import json
+import asyncio
 from fastapi import HTTPException
-from backend.core.redis import redis_client
+from backend.core.cache import get_cached_json, set_cached_json
 from backend.core.config import settings
 
 from anime_parsers_ru import KodikParserAsync
@@ -28,22 +28,27 @@ async def get_player_info_cached(shikimori_id: str) -> dict:
     cache_key = f"kodik:info:{shikimori_id}"
 
     # 1. Проверяем Redis
-    cached_data = await redis_client.get(cache_key)
-    if cached_data:
-        return json.loads(cached_data)
+    cached_data = await get_cached_json(cache_key)
+    if cached_data is not None:
+        return cached_data
 
     # 2. Создаем парсер
     parser = await get_kodik_parser()
 
     try:
         # 3. Получаем информацию о сериях и переводах
-        info = await parser.get_info(shikimori_id, "shikimori")
+        info = await asyncio.wait_for(
+            parser.get_info(shikimori_id, "shikimori"),
+            timeout=settings.EXTERNAL_SERVICE_TIMEOUT_SECONDS,
+        )
 
         # 4. Кэшируем на 6 часов (21600 секунд)
-        await redis_client.setex(cache_key, 21600, json.dumps(info))
+        await set_cached_json(cache_key, 21600, info)
 
         return info
 
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Kodik не ответил вовремя")
     except Exception as e:
         raise HTTPException(
             status_code=502,
@@ -66,20 +71,23 @@ async def get_stream_url_cached(
     cache_key = f"kodik:stream:{shikimori_id}:{episode}:{translation_id}:{quality}"
 
     # 1. Проверяем Redis
-    cached_data = await redis_client.get(cache_key)
-    if cached_data:
-        return json.loads(cached_data)
+    cached_data = await get_cached_json(cache_key)
+    if cached_data is not None:
+        return cached_data
 
     parser = await get_kodik_parser()
 
     try:
         # 3. Получаем ссылку на m3u8 плейлист
-        m3u8_link = await parser.get_m3u8_playlist_link(
-            id=shikimori_id,
-            id_type="shikimori",
-            seria_num=episode,
-            translation_id=translation_id,
-            quality=quality
+        m3u8_link = await asyncio.wait_for(
+            parser.get_m3u8_playlist_link(
+                id=shikimori_id,
+                id_type="shikimori",
+                seria_num=episode,
+                translation_id=translation_id,
+                quality=quality,
+            ),
+            timeout=settings.EXTERNAL_SERVICE_TIMEOUT_SECONDS,
         )
 
         result = {
@@ -89,10 +97,12 @@ async def get_stream_url_cached(
         }
 
 
-        await redis_client.setex(cache_key, 7200, json.dumps(result))
+        await set_cached_json(cache_key, 7200, result)
 
         return result
 
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Kodik не ответил вовремя")
     except Exception as e:
         raise HTTPException(
             status_code=502,

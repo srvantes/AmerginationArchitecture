@@ -1,9 +1,9 @@
-from fastapi import Depends, APIRouter, Query, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, List
+from typing import Literal
+
+from fastapi import APIRouter, Query, HTTPException
 
 
-from backend.services.shikimori_client import search_anime_cashed, get_anime_details_cached
+from backend.services.shikimori_client import search_anime_cached, get_anime_details_cached
 from backend.services.animego_service import (
     search_animego,
     get_voices_cached,
@@ -11,20 +11,14 @@ from backend.services.animego_service import (
     get_episodes_from_page,
     get_episodes_info
 )
-
-'''
-from backend.core.database import get_db
-from backend.database.sсhemas.anime import BaseAnimeDB, AnimeResponse
-from backend.crud.anime import crud_anime
-
-'''
+from backend.services.kodik_player import get_player_info_cached, get_stream_url_cached
 
 router = APIRouter(tags=["anime"])
 
 @router.get("/search")
 async def search_anime(q:str = Query(..., min_length=2, description="Название произведения")):
 
-    result = await search_anime_cashed(q)
+    result = await search_anime_cached(q)
     return result
 
 @router.get("/details",)
@@ -76,4 +70,23 @@ async def animego_stream(
 ):
     """Получение ссылки на видеопоток"""
     return await get_stream_url(anime_id, episode, translation_id, player)
+
+
+@router.get("/kodik/info")
+async def kodik_info(
+    shikimori_id: str = Query(..., min_length=1, description="ID аниме на Shikimori"),
+):
+    """Получение доступных серий и переводов по ID Shikimori."""
+    return await get_player_info_cached(shikimori_id)
+
+
+@router.get("/kodik/stream")
+async def kodik_stream(
+    shikimori_id: str = Query(..., min_length=1, description="ID аниме на Shikimori"),
+    episode: int = Query(..., ge=1, description="Номер эпизода"),
+    translation_id: str = Query(..., min_length=1, description="ID перевода"),
+    quality: Literal[360, 480, 720, 1080] = 720,
+):
+    """Получение HLS-ссылки для выбранной серии и перевода."""
+    return await get_stream_url_cached(shikimori_id, episode, translation_id, quality)
 

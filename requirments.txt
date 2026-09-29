@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 sqlalchemy
+asyncpg
 alembic
 pydantic
 fastapi-users
@@ -17,4 +18,4 @@ httpx
 aiofiles
 pydantic_settings
 pyjwt
-httpx
+anime-parsers-ru[async,lxml]

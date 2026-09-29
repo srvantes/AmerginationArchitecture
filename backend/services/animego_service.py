@@ -1,24 +1,8 @@
-### SSL patch
-
-import requests
-import urllib3
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-_origin_request = requests.Session.request
-
-def _no_verify_request(self, method, url, **kwargs):
-    kwargs['verify'] = False
-    return _origin_request(self, method, url, **kwargs)
-
-requests.Session.request = _no_verify_request
-
-### END SSL PATCH
-
-import json
 import asyncio
+import requests
 from fastapi import HTTPException
-from backend.core.redis import redis_client
+from backend.core.cache import get_cached_json, set_cached_json
+from backend.core.config import settings
 
 from anime_parsers_ru import AnimegoParser
 
@@ -29,21 +13,26 @@ _parser = AnimegoParser(use_lxml=True, use_cache=True)
 
 async def _run_sync(func, *args, **kwargs):
     """Запускает синхронную функцию в отдельном потоке, чтобы не блокировать event loop"""
-    return await asyncio.to_thread(func, *args, **kwargs)
+    return await asyncio.wait_for(
+        asyncio.to_thread(func, *args, **kwargs),
+        timeout=settings.EXTERNAL_SERVICE_TIMEOUT_SECONDS,
+    )
 
 
 async def search_animego(query: str) -> list:
     """Поиск аниме на AnimeGO"""
     cache_key = f"animego:search:{query.lower().strip()}"
 
-    cached = await redis_client.get(cache_key)
-    if cached:
-        return json.loads(cached)
+    cached = await get_cached_json(cache_key)
+    if cached is not None:
+        return cached
 
     try:
         results = await _run_sync(_parser.search, query)
-        await redis_client.setex(cache_key, 86400, json.dumps(results))  # 24 часа
+        await set_cached_json(cache_key, 86400, results)  # 24 часа
         return results
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="AnimeGo не ответил вовремя")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ошибка поиска на AnimeGO: {str(e)}")
 
@@ -55,14 +44,16 @@ async def get_voices_cached(anime_id: str, episode: int = 1) -> dict:
     """
     cache_key = f"animego:voices:{anime_id}:{episode}"
 
-    cached = await redis_client.get(cache_key)
-    if cached:
-        return json.loads(cached)
+    cached = await get_cached_json(cache_key)
+    if cached is not None:
+        return cached
 
     try:
         voices_data = await _run_sync(_parser.get_voices, anime_id, episode)
-        await redis_client.setex(cache_key, 21600, json.dumps(voices_data))  # 6 часов
+        await set_cached_json(cache_key, 21600, voices_data)  # 6 часов
         return voices_data
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="AnimeGo не ответил вовремя")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ошибка получения озвучек: {str(e)}")
 
@@ -75,9 +66,9 @@ async def get_stream_url(anime_id: str, episode: int, translation_id: str, playe
     """
     cache_key = f"animego:stream:{anime_id}:{episode}:{translation_id}:{player}"
 
-    cached = await redis_client.get(cache_key)
-    if cached:
-        return json.loads(cached)
+    cached = await get_cached_json(cache_key)
+    if cached is not None:
+        return cached
 
     try:
         # Сначала получаем список озвучек, чтобы найти нужную
@@ -136,11 +127,13 @@ async def get_stream_url(anime_id: str, episode: int, translation_id: str, playe
         else:
             raise HTTPException(status_code=501, detail=f"Плеер {player_type} пока не поддерживается")
 
-        await redis_client.setex(cache_key, 7200, json.dumps(result))  # 2 часа
+        await set_cached_json(cache_key, 7200, result)  # 2 часа
         return result
 
     except HTTPException:
         raise
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="AnimeGo не ответил вовремя")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ошибка получения потока: {str(e)}")
 
@@ -149,14 +142,16 @@ async def get_episodes_info(anime_id: str) -> list:
     """Получает список всех эпизодов для аниме"""
     cache_key = f"animego:episodes:{anime_id}"
 
-    cached = await redis_client.get(cache_key)
-    if cached:
-        return json.loads(cached)
+    cached = await get_cached_json(cache_key)
+    if cached is not None:
+        return cached
 
     try:
         episodes = await _run_sync(_parser.get_episodes_info, anime_id)
-        await redis_client.setex(cache_key, 43200, json.dumps(episodes))  # 12 часов
+        await set_cached_json(cache_key, 43200, episodes)  # 12 часов
         return episodes
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="AnimeGo не ответил вовремя")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ошибка получения эпизодов: {str(e)}")
 
@@ -168,20 +163,20 @@ async def get_episodes_from_page(anime_slug_id: str) -> list:
     """
     cache_key = f"animego:episodes_page:{anime_slug_id}"
 
-    cached = await redis_client.get(cache_key)
-    if cached:
-        return json.loads(cached)
+    cached = await get_cached_json(cache_key)
+    if cached is not None:
+        return cached
 
     try:
         url = f"https://animego.org/anime/{anime_slug_id}"
 
         def _parse():
-            import requests
             from bs4 import BeautifulSoup
 
             resp = requests.get(url, headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }, verify=False)
+            }, timeout=15)
+            resp.raise_for_status()
 
             soup = BeautifulSoup(resp.text, "html.parser")
 
@@ -201,7 +196,7 @@ async def get_episodes_from_page(anime_slug_id: str) -> list:
                         "air_date": None,
                         "is_released": True
                     })
-                except:
+                except (TypeError, ValueError):
                     continue
 
             return sorted(episodes, key=lambda x: x["seria"])
@@ -215,8 +210,12 @@ async def get_episodes_from_page(anime_slug_id: str) -> list:
             episodes = [{"seria": i, "title": f"Серия {i}", "air_date": None, "is_released": True}
                         for i in range(1, total + 1)]
 
-        await redis_client.setex(cache_key, 43200, json.dumps(episodes))
+        await set_cached_json(cache_key, 43200, episodes)
         return episodes
 
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="AnimeGo не ответил вовремя")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ошибка парсинга эпизодов: {str(e)}")

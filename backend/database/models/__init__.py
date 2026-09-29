@@ -1,4 +1,4 @@
 from .user import User
-from .anime import Anime, Review
+from .anime import Review
 
-__all__ = ["User", "Review", "Anime"]
+__all__ = ["User", "Review"]

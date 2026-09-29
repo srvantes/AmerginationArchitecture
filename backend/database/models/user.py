@@ -1,4 +1,4 @@
-from sqlalchemy import Table, Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from backend.core.database import Base
@@ -12,15 +12,22 @@ class User(Base):
 
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    username = Column(String, unique=True, index=True, nullable=False)
+    username = Column(String(40), unique=True, index=True, nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(100), nullable=False)
+    hashed_password = Column(String(255), nullable=False)
 
 
 
 
     # Relationships
-    profile = relationship("UserProfile", backref="user", uselist=False)
+    profile = relationship(
+        "UserProfile",
+        back_populates="user",
+        uselist=False,
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+    reviews = relationship("Review", back_populates="user", cascade="all, delete-orphan")
 #    review = relationship("Review", back_populates="user")
 #    anime = relationship("Anime", back_populates="user")
 
@@ -33,7 +40,7 @@ class UserBadge(Base):
     __tablename__ = "user_badges"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
     badge_id = Column(Integer, ForeignKey("badges.id"))
 
 
@@ -51,10 +58,11 @@ class Badge(Base):
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
-    id = Column(UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True)
+    id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    user = relationship("User", back_populates="profile")
     avatar_url = Column(String(255), default="/static/default_avatar.jpg")
     profile_background = Column(String(255), default="/static/default_background.jpg")
-    status = Column(String(20), default='online')
+    status = Column(String(20), default="online", server_default="online", nullable=False)
     custom_url = Column(String(255), unique=True)
     nickname = Column(String(100))
     country = Column(String(100))
@@ -63,15 +71,15 @@ class UserProfile(Base):
 
     #Statistic
 
-    anime_watched = Column(Integer, default=0)
-    reviews_written = Column(Integer, default=0)
+    anime_watched = Column(Integer, default=0, server_default="0", nullable=False)
+    reviews_written = Column(Integer, default=0, server_default="0", nullable=False)
 
-    role = Column(String(20), default='user') # user, moder, admin
-    is_verified = Column(Boolean, default=False)
-    is_premium = Column(Boolean, default=False)
-    is_active = Column(Boolean, default=True)
+    role = Column(String(20), default="user", server_default="user", nullable=False)
+    is_verified = Column(Boolean, default=False, server_default="false", nullable=False)
+    is_premium = Column(Boolean, default=False, server_default="false", nullable=False)
+    is_active = Column(Boolean, default=True, server_default="true", nullable=False)
 
-    show_watchlist = Column(Boolean, default=False)
+    show_watchlist = Column(Boolean, default=False, server_default="false", nullable=False)
 
-    created_at = Column(DateTime, server_default=func.now())
-    last_online = Column(DateTime, server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_online = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

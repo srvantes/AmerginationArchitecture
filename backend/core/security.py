@@ -1,27 +1,26 @@
-import os
+import logging
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Optional
-
 from enum import Enum
+from typing import Annotated
+from uuid import UUID, uuid4
+
 import jwt
-from fastapi import Depends, HTTPException, status, Header
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm, SecurityScopes, HTTPBearer
-from jose import JWTError
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
-from passlib.context import CryptContext
+from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
-from .password import verify_password
 
-#from ..database.redis_client import redis_client
-from .database import get_db
 from backend.database.models.user import User
-from .config import get_settings
-from ..crud import crud_user
-from .redis import redis_client
 
-Settings = get_settings()
-SECRET_KEY = Settings.SECRET_KEY
-ALGORITHM = Settings.ALGORITHM
+from .config import settings
+from .database import get_db
+from .redis import redis_client
+from ..crud import crud_user
+
+
+logger = logging.getLogger(__name__)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 class UserRole(str, Enum):
@@ -29,109 +28,123 @@ class UserRole(str, Enum):
     USER = "user"
     MODERATOR = "moderator"
 
+
 class Permissions:
-    # Права пользователей
-    USER_BASIC = 'user:basic'
-    #USER_PREMIUM = 'user:premium'
-
-
-    # Права модератора
-    MODERATE_REVIEWS = 'moderate:reviews'
-    MODERATE_USERS = 'moderate:users'
-    MANAGE_ANIME = 'manage:anime'
-
-    # Права администратора
-    MANAGE_USERS = 'manage:users'
-    MANAGE_SYSTEM = 'manage:system'
-    VIEW_STATS = 'view:stats'
-
-
+    USER_BASIC = "user:basic"
+    MODERATE_REVIEWS = "moderate:reviews"
+    MODERATE_USERS = "moderate:users"
+    MANAGE_ANIME = "manage:anime"
+    MANAGE_USERS = "manage:users"
+    MANAGE_SYSTEM = "manage:system"
+    VIEW_STATS = "view:stats"
 
 
 ROLE_PERMISSIONS = {
-    UserRole.USER: [Permissions.USER_BASIC],
-    UserRole.MODERATOR: [
+    UserRole.USER: {Permissions.USER_BASIC},
+    UserRole.MODERATOR: {
         Permissions.USER_BASIC,
         Permissions.MODERATE_REVIEWS,
         Permissions.MODERATE_USERS,
-        Permissions.MANAGE_ANIME
-    ],
-    UserRole.ADMIN: [
+        Permissions.MANAGE_ANIME,
+    },
+    UserRole.ADMIN: {
         Permissions.USER_BASIC,
         Permissions.MODERATE_REVIEWS,
         Permissions.MODERATE_USERS,
         Permissions.MANAGE_ANIME,
         Permissions.MANAGE_USERS,
         Permissions.MANAGE_SYSTEM,
-        Permissions.VIEW_STATS
-    ],
+        Permissions.VIEW_STATS,
+    },
 }
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-security = HTTPBearer
 
-
-async def verify_token_not_blacklisted(authorization: str = Header(...)):
-    token = authorization.replace("Bearer ", "")
-    is_blacklisted = await redis_client.get(f"blacklist:{token}")
-    if is_blacklisted:
-        raise HTTPException(status_code=401, detail="Token has been revoked")
-    return token
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-
-    if 'user_id' in to_encode and hasattr(to_encode['user_id'], 'hex'):
-        to_encode['user_id'] = str(to_encode['user_id'])
-
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-
-async def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)], db: AsyncSession = Depends(get_db)
-) -> User:
-    credentials_exception = HTTPException(
+def credentials_exception() -> HTTPException:
+    return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def create_access_token(user_id: UUID, expires_delta: timedelta | None = None) -> str:
+    now = datetime.now(timezone.utc)
+    expires_at = now + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+    payload = {
+        "sub": str(user_id),
+        "jti": str(uuid4()),
+        "type": "access",
+        "iat": now,
+        "exp": expires_at,
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def decode_access_token(token: str) -> dict:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
-        username: str = payload.get("sub")
-        user_id: int = payload.get("user_id")
-        if username is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+            options={"require": ["sub", "jti", "exp", "type"]},
+        )
+        if payload["type"] != "access":
+            raise credentials_exception()
+        UUID(payload["sub"])
+        UUID(payload["jti"])
+        return payload
+    except (InvalidTokenError, KeyError, TypeError, ValueError):
+        raise credentials_exception()
 
-    user = await crud_user.get_by_username(db, username)
-    if user is None:
-        raise credentials_exception
+
+async def _is_token_revoked(jti: str) -> bool:
+    try:
+        return bool(await redis_client.exists(f"revoked-token:{jti}"))
+    except RedisError as exc:
+        logger.warning("Redis unavailable during token check: %s", exc)
+        return False
+
+
+async def revoke_access_token(token: str) -> None:
+    payload = decode_access_token(token)
+    ttl = int(payload["exp"] - datetime.now(timezone.utc).timestamp())
+    if ttl <= 0:
+        return
+    try:
+        await redis_client.setex(f"revoked-token:{payload['jti']}", ttl, "1")
+    except RedisError as exc:
+        logger.warning("Redis unavailable during logout: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Token revocation service is unavailable",
+        )
+
+
+async def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    payload = decode_access_token(token)
+    if await _is_token_revoked(payload["jti"]):
+        raise credentials_exception()
+
+    user = await crud_user.get_by_id(db, UUID(payload["sub"]))
+    if user is None or user.profile is None or not user.profile.is_active:
+        raise credentials_exception()
     return user
 
 
-async def check_permissions(user, permissions: str):
-    if user.role not in ROLE_PERMISSIONS:
-        raise HTTPException(
-            status_code=403, detail="Access denied"
-        )
+def require_permission(permission: str):
+    async def permission_dependency(user: User = Depends(get_current_user)) -> User:
+        try:
+            role = UserRole(user.profile.role)
+        except (AttributeError, ValueError):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        if permission not in ROLE_PERMISSIONS[role]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission {permission} required",
+            )
+        return user
 
-    if permissions not in ROLE_PERMISSIONS[user.role]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=f"Permission {permissions} required"
-        )
-
-async def authenticate_user(user_, db: AsyncSession = Depends(get_db)):
-    user = await crud_user.get_by_email(db, email=user_.email)
-    if not user:
-        return False
-    if not verify_password(user.password, user.hashed_password):
-        return False
-    return user
+    return permission_dependency

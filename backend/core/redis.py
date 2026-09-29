@@ -1,4 +1,6 @@
 from redis.asyncio import Redis
+from redis.asyncio.retry import Retry
+from redis.backoff import NoBackoff
 from typing import AsyncGenerator
 from fastapi import Depends
 
@@ -12,9 +14,12 @@ redis_client = Redis(
     db=settings.REDIS_DB,
     decode_responses=True,
     max_connections=settings.REDIS_MAX_CONNECTIONS,
+    socket_connect_timeout=settings.REDIS_CONNECT_TIMEOUT_SECONDS,
+    socket_timeout=settings.REDIS_SOCKET_TIMEOUT_SECONDS,
+    retry=Retry(NoBackoff(), 0),
 )
 
 
 async def close_redis():
-    await redis_client.close()
+    await redis_client.aclose()
 

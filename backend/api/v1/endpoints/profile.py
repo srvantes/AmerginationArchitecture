@@ -12,17 +12,18 @@ from backend.database.sсhemas.user import UserProfile as UserProfile_sh, BaseUs
 from backend.crud.user import crud_user
 router = APIRouter(tags=['profile'])
 
-@router.get("/profile/{user_id}", response_model=UserProfile_sh)
+@router.get("/{user_id}", response_model=UserProfile_sh)
 async def get_profile(
+        user_id: UUID,
         user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
 ):
-    user_profile = await crud_user.get_user_profile(db, user.id)
+    user_profile = await crud_user.get_user_profile(db, user_id)
     if not user_profile:
         raise HTTPException(status_code=404, detail="User not found")
     return user_profile
 
-@router.post("/profile/settings", response_model=UserProfile_sh)
+@router.patch("/settings", response_model=UserProfile_sh)
 async def update_profile(
         profile_data: UserProfileUpdate,
         user: User = Depends(get_current_user),

@@ -1,76 +1,68 @@
 from datetime import datetime
-from typing import Optional
-from uuid import UUID as PydanticUUID
+from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
-from typing import List
-
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class BaseBadge(BaseModel):
-
     name: str
-    description: Optional[str] = None
-    icon_url: Optional[str] = None
+    description: str | None = None
+    icon_url: str | None = None
     rarity: str
 
+
 class Badge(BaseBadge):
+    model_config = ConfigDict(from_attributes=True)
     id: int
-
-    class Config:
-        from_attributes = True
-
 
 
 class BaseUser(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     username: str = Field(..., min_length=3, max_length=40)
     email: EmailStr
-    class Config:
-        from_attributes = True
 
 
 class UserCreate(BaseUser):
-    password: str = Field(..., min_length=8)
+    password: str = Field(..., min_length=8, max_length=128)
 
-class UserOut(BaseModel):
-    id: PydanticUUID
-    username: str
-    email: EmailStr
-    class Config:
-        from_attributes = True
+
+class UserOut(BaseUser):
+    id: UUID
+
 
 class UserLogin(BaseModel):
-    username: str
-    password: str = Field(..., min_length=8)
+    username: str = Field(..., min_length=1, max_length=100)
+    password: str = Field(..., min_length=8, max_length=128)
 
 
 class UserUpdate(BaseModel):
-    username: Optional[str] = None
-    bio: Optional[str] = None
-    country: Optional[str] = None
-    show_nickname: Optional[bool] = None
-    avatar_url: Optional[str] = None
-    profile_background: Optional[str] = None
+    username: str | None = Field(None, min_length=3, max_length=40)
 
 
-class UserProfile(BaseUser):
-    id: PydanticUUID
-    bio: Optional[str] = None
-    country: Optional[str] = None
+class UserProfile(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    avatar_url: str | None = None
+    profile_background: str | None = None
     status: str
+    custom_url: str | None = None
+    nickname: str | None = None
+    country: str | None = None
+    bio: str | None = None
     anime_watched: int
     reviews_written: int
     role: str
     is_verified: bool
     is_premium: bool
-    badges: List[Badge] = []
+    is_active: bool
+    show_watchlist: bool
     created_at: datetime
     last_online: datetime
-    avatar_url: Optional[str] = None
-    custom_url: Optional[str] = Field(None, pattern=r"^[a-zA-Z0-9_-]+$")
 
-    class Config():
-        from_attributes = True
+
+class UserMe(BaseUser):
+    id: UUID
+    profile: UserProfile
 
 
 class UserStats(BaseModel):
@@ -78,31 +70,27 @@ class UserStats(BaseModel):
     online_users: int
     new_today: int
 
-class UserInDB(BaseUser):
-    hashed_password: str
-    id: PydanticUUID
-    created_at: datetime
-    last_online: datetime
-    role: str = "user"
 
-    class Config:
-        from_attributes = True
+class UserInDB(BaseUser):
+    id: UUID
+    hashed_password: str
 
 
 class Token(BaseModel):
     access_token: str
     token_type: str
 
+
 class TokenData(BaseModel):
-    user_id: Optional[int] = None
-    nickname: Optional[str] = None
+    user_id: UUID | None = None
+
 
 class UserProfileUpdate(BaseModel):
-    avatar_url: Optional[str] = None
-    profile_background: Optional[str] = None
-    status: Optional[str] = Field(None, max_length=20)
-    custom_url: Optional[str] = Field(None, pattern=r"^[a-zA-Z0-9_-]+$", max_length=50)
-    nickname: Optional[str] = Field(None, max_length=100)
-    country: Optional[str] = Field(None, max_length=100)
-    bio: Optional[str] = Field(None, max_length=1000)
-    show_watchlist: Optional[bool] = None
+    avatar_url: str | None = None
+    profile_background: str | None = None
+    status: str | None = Field(None, max_length=20)
+    custom_url: str | None = Field(None, pattern=r"^[a-zA-Z0-9_-]+$", max_length=50)
+    nickname: str | None = Field(None, max_length=100)
+    country: str | None = Field(None, max_length=100)
+    bio: str | None = Field(None, max_length=1000)
+    show_watchlist: bool | None = None

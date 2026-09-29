@@ -1,89 +1,34 @@
-from typing import List, Optional
-from uuid import UUID as PydanticUUID
-
-from pydantic import BaseModel, Field
 from datetime import datetime
+from typing import Literal
+from uuid import UUID
 
-from pydantic.v1 import UUID1
-
-from backend.database.sсhemas.user import BaseUser
+from pydantic import BaseModel, ConfigDict, Field
 
 
-### ======== BASE SHEMAS ======== ###
-class BaseGenre(BaseModel):
-    name: Optional[str] = Field(..., min_length=1, max_length=50)
+AnimeSource = Literal["shikimori", "animego", "kodik"]
 
-class AnimeResponse(BaseModel):
-    title: Optional[str] = Field(..., min_length=1, max_length=200)
-    description: Optional[str] = None
-    episodes: Optional[int] = Field(None, ge=0)
-    seasons: Optional[int] = Field(None, ge=0)
-    status: Optional[str] = Field(default='ongoing', pattern='^(ongoing|completed|announced)$')
-    release_date: Optional[datetime] = Field(None)
-    rating: Optional[float] = Field(None, ge=0, le=10, description="Rating must be between 0 and 10")
 
-class BaseAnimeDB(BaseModel):
-    id: PydanticUUID
-    api_url: Optional[str] = Field(None, min_length=1, max_length=200)
-
-class BaseReviews(BaseModel):
-    id: PydanticUUID
-    anime: PydanticUUID
-    user: PydanticUUID
+class ReviewCreate(BaseModel):
+    anime_source: AnimeSource = "shikimori"
+    anime_external_id: str = Field(..., min_length=1, max_length=100)
+    anime_title: str = Field(..., min_length=1, max_length=200)
     text: str = Field(..., min_length=1, max_length=6000)
-    rating: Optional[float] = Field(None, ge=0, le=10)
-    anime_title: Optional[str] = Field(None, min_length=1, max_length=50)
-    date: Optional[datetime] = Field(None)
+    rating: float | None = Field(None, ge=0, le=10)
 
 
-### ======== CREATE SHEMAS ======== ##
-class CreateReview(BaseReviews):
+class ReviewUpdate(BaseModel):
+    text: str | None = Field(None, min_length=1, max_length=6000)
+    rating: float | None = Field(None, ge=0, le=10)
+
+
+class ReviewOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    anime_source: str
+    anime_external_id: str
+    anime_title: str
     text: str
-    rating: float | None = None
-
-
-class UpdateReview(BaseReviews):
-    text: Optional[str]
-
-'''### ======== RESPONSE SHEMAS ======== ###
-
-class Genre(BaseGenre):
-    id: int
-
-    class Config:
-        from_attributes = True
-
-class UserSimple(BaseModel):
-    id: int
-    username: str
-    avatar_url: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
-class Review(BaseReviews):
-    id: int
-    user: UserSimple
-    crafted_at: datetime
-    updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-class Anime(BaseAnime):
-    id: int
-    genres: List[Genre] = []
-    reviews: List[Review] = []
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-'''
-class Wishlist(BaseModel):
-    id: PydanticUUID
-
-
-
-
+    anime_rating: float | None
+    date: datetime
