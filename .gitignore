@@ -6,3 +6,14 @@ env/
 
 # Python cache and build files
 __pycache__/
+*.py[cod]
+
+# IDE files
+.idea/
+
+# Test and tooling caches
+.pytest_cache/
+.coverage
+
+# Local logs
+*.log
