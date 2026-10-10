@@ -17,7 +17,11 @@ class Settings(BaseSettings):
     ALGORITHM: Literal["HS256"] = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     SQL_ECHO: bool = False
-    EXTERNAL_SERVICE_TIMEOUT_SECONDS: float = 20.0
+    EXTERNAL_SERVICE_TIMEOUT_SECONDS: float = Field(default=20.0, gt=0, le=120)
+    EXTERNAL_CONNECT_TIMEOUT_SECONDS: float = Field(default=3.0, gt=0, le=30)
+    EXTERNAL_READ_TIMEOUT_SECONDS: float = Field(default=5.0, gt=0, le=60)
+    EXTERNAL_SERVICE_ATTEMPTS: int = Field(default=2, ge=1, le=3)
+    EXTERNAL_RETRY_MAX_DELAY_SECONDS: float = Field(default=2.0, ge=0, le=5)
 
     # Redis
     REDIS_HOST: str = "localhost"

@@ -80,6 +80,7 @@ class UserProfile(Base):
     is_active = Column(Boolean, default=True, server_default="true", nullable=False)
 
     show_watchlist = Column(Boolean, default=False, server_default="false", nullable=False)
+    can_write_reviews = Column(Boolean, default=False, server_default="false", nullable=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_online = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

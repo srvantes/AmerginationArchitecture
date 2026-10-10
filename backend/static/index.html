@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <meta name="theme-color" content="#0c1527">
+ <title>Amergination — аниме</title>
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Marck+Script&display=swap" rel="stylesheet">
+ <link rel="stylesheet" href="/static/app.css">
+ <script src="/static/app.js" defer></script>
+ <script src="/static/discussion.js" defer></script>
+</head>
+<body>
+ <header class="site-header">
+  <a href="/" class="brand" aria-label="Amergination — главная">Amergination</a>
+  <nav aria-label="Основная навигация"><a href="/" class="nav-active">Главная</a><a href="/#ongoing">Онгоинги</a><a href="/#collection">Подборки</a></nav>
+  <div class="header-actions"><button class="icon-button" id="open-search" aria-label="Открыть поиск"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.6 4.6"/></svg></button><span class="header-divider"></span><button class="login-button" id="open-auth"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg><span>Войти</span></button></div>
+ </header>
+ <main id="home">
+  <section class="hero" aria-labelledby="hero-title">
+   <div class="hero-orbit orbit-one" aria-hidden="true"></div><div class="hero-orbit orbit-two" aria-hidden="true"></div>
+   <h1 id="hero-title">Amergination</h1>
+  </section>
+  <section class="shelf news-section" aria-labelledby="news-heading">
+   <div class="section-heading"><div><h2 class="script-heading" id="news-heading">News</h2></div><div class="shelf-controls"><span class="subtle">01 — 03</span><button class="arrow" data-scroll="news-track" data-direction="-1" aria-label="Предыдущие новости">←</button><button class="arrow" data-scroll="news-track" data-direction="1" aria-label="Следующие новости">→</button></div></div>
+   <div class="horizontal news-track" id="news-track">
+    <button class="news-card news-frieren" data-news="0"><div class="news-art"><span class="news-tag">НАШ ВЫБОР</span><span class="art-symbol">旅</span><div class="art-circle"></div></div><div class="news-copy"><div class="news-meta">РЕДАКЦИЯ  4 МИН ЧТЕНИЯ</div><h3>Подборка приключенческого аниме</h3><span class="news-link">Читать <span>↗</span></span></div></button>
+    <button class="news-card news-season" data-news="1"><div class="news-art"><span class="news-tag">НОВЫЙ СЕЗОН</span><span class="art-symbol">秋</span><div class="art-circle"></div></div><div class="news-copy"><div class="news-meta">ПОДБОРКА  6 МИН ЧТЕНИЯ</div><h3>Аниме нового сезона</h3><span class="news-link">Читать <span>↗</span></span></div></button>
+    <button class="news-card news-naruto" data-news="2"><div class="news-art"><span class="news-tag">ВЕЧНАЯ КЛАССИКА</span><span class="art-symbol">忍</span><div class="art-circle"></div></div><div class="news-copy"><div class="news-meta">ЗНАКОМСТВО  5 МИН ЧТЕНИЯ</div><h3>Наруто: порядок просмотра</h3><span class="news-link">Читать <span>↗</span></span></div></button>
+   </div>
+  </section>
+  <p id="catalog-status" class="subtle catalog-status" role="status"></p>
+  <section class="shelf" id="ongoing" aria-labelledby="ongoing-heading"><div class="section-heading"><div><h2 id="ongoing-heading">Сейчас в эфире</h2></div><div class="shelf-controls"><span class="subtle">Онгоинги</span><button class="arrow" data-scroll="ongoing-track" data-direction="-1" aria-label="Предыдущие онгоинги">←</button><button class="arrow" data-scroll="ongoing-track" data-direction="1" aria-label="Следующие онгоинги">→</button></div></div><div class="horizontal poster-track" id="ongoing-track"><p class="subtle">Загружаем каталог…</p></div></section>
+  <section class="shelf" id="collection" aria-labelledby="collection-heading"><div class="section-heading"><div><h2 id="collection-heading">Стоит посмотреть</h2></div><div class="shelf-controls"><span class="subtle">Высокий рейтинг</span><button class="arrow" data-scroll="collection-track" data-direction="-1" aria-label="Предыдущие рекомендации">←</button><button class="arrow" data-scroll="collection-track" data-direction="1" aria-label="Следующие рекомендации">→</button></div></div><div class="horizontal poster-track" id="collection-track"></div></section>
+ </main>
+ <main id="anime-page" hidden>
+  <div class="breadcrumbs"><a href="/">Главная</a><span>/</span><span id="breadcrumb-title">Аниме</span></div>
+  <section class="anime-overview"><div class="detail-cover"><img id="detail-poster" alt=""><span class="detail-score" id="detail-score"></span></div><div class="detail-copy"><p class="eyebrow" id="detail-type"></p><h1 id="detail-title"></h1><p class="original-title" id="detail-original"></p><div class="detail-tags" id="detail-tags"></div><p class="description" id="detail-description"></p><p class="demo-description" id="detail-source"></p><div class="detail-actions"><a class="gold-button" href="#player-section"><span>▶</span> Смотреть</a><button class="secondary-button" id="add-list">＋ В мой список</button></div></div></section>
+  <section class="shelf related-section"><div class="section-heading"><div><h2>Связанные тайтлы</h2></div><div class="shelf-controls"><button class="arrow" data-scroll="related-track" data-direction="-1" aria-label="Предыдущие связанные тайтлы">←</button><button class="arrow" data-scroll="related-track" data-direction="1" aria-label="Следующие связанные тайтлы">→</button></div></div><div class="horizontal poster-track related-track" id="related-track"></div></section>
+  <section class="player-section" id="player-section"><div class="section-heading"><div><h2>Просмотр</h2></div></div><div class="player-toolbar"><label>Серия<select id="episode-select" disabled><option>Загружаем…</option></select></label><label>Озвучка<select id="voice-select" disabled><option>Выберите серию</option></select></label><button id="start-player" class="gold-button" disabled>▶ Смотреть серию</button></div><p id="player-status" class="subtle" role="status">Загружаем список серий…</p><div class="player-frame"><div id="player-placeholder"><span class="placeholder-play">▶</span><h3>Плеер</h3><p>Выбери серию и озвучку, затем нажми «Смотреть»</p></div><iframe id="embedded-video" title="Видеоплеер" hidden allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation"></iframe></div></section>
+  <section class="discussion"><div class="tab-bar" role="tablist" aria-label="Обсуждение аниме"><button role="tab" id="comments-tab" aria-selected="true" aria-controls="comments-panel">Комментарии <span>0</span></button><button role="tab" id="reviews-tab" aria-selected="false" aria-controls="reviews-panel" tabindex="-1">Рецензии <span>0</span></button></div><p id="discussion-status" class="subtle" role="status"></p><div id="comments-panel" role="tabpanel" aria-labelledby="comments-tab"><div id="comments-form-area"></div><div id="comments-list"></div><button id="comments-more" class="secondary-button" hidden>Показать ещё</button></div><div id="reviews-panel" role="tabpanel" aria-labelledby="reviews-tab" hidden><div id="reviews-form-area"></div><div id="reviews-list"></div><button id="reviews-more" class="secondary-button" hidden>Показать ещё</button></div></section>
+ </main>
+ <footer><a class="footer-brand" href="/">Amergination</a><span>Каталог: Shikimori и AnimeGo · новости демонстрационные</span><a href="/docs">API ↗</a></footer>
+ <dialog id="search-dialog" class="search-dialog"><div class="dialog-heading"><div><h2>Поиск аниме</h2></div><button class="icon-button close-dialog" aria-label="Закрыть поиск">×</button></div><form id="search-form"><input id="search-input" type="search" minlength="2" required placeholder="Название на русском или английском" aria-label="Название аниме"><button class="gold-button">Найти</button></form><p class="subtle" id="search-status" role="status">Например, Наруто или Фрирен</p><div class="search-results" id="search-results"></div></dialog>
+ <dialog id="auth-dialog" class="auth-dialog"><div class="dialog-heading"><div><h2 class="script-heading">Amergination</h2></div><button class="icon-button close-dialog" aria-label="Закрыть авторизацию">×</button></div><form id="auth-form"><label>Имя пользователя<input id="auth-username" autocomplete="username" minlength="3" maxlength="40" required placeholder="Имя пользователя"></label><label id="auth-email-label" hidden>Email<input id="auth-email" type="email" autocomplete="email" maxlength="100"></label><label>Пароль<input id="auth-password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required placeholder="Пароль"></label><button id="auth-submit" class="gold-button">Войти</button></form><button id="auth-switch" class="secondary-button">Создать аккаунт</button><button id="auth-logout" class="secondary-button" hidden>Выйти</button><p id="auth-status" class="subtle" role="status"></p></dialog>
+ <dialog id="news-dialog"><div class="dialog-heading"><p class="eyebrow">AMERGINATION NEWS</p><button class="icon-button close-dialog" aria-label="Закрыть новость">×</button></div><h2 id="news-title"></h2><p id="news-text"></p><p class="subtle">Демонстрационная новость для просмотра оформления.</p></dialog>
+ <div id="toast" role="status" hidden></div>
+</body>
+</html>

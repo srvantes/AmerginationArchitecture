@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .base import CRUDBase
 from ..database.models.anime import Review
+from ..database.models.user import UserProfile
 from ..database.sсhemas.anime import ReviewCreate, ReviewUpdate
 
 
@@ -23,12 +24,19 @@ class CRUDReview(CRUDBase[Review, ReviewCreate, ReviewUpdate]):
         user_id: UUID,
         review_data: ReviewCreate,
     ) -> Review:
+        result = await db.execute(select(UserProfile).where(UserProfile.id == user_id).with_for_update()
+                                  .execution_options(populate_existing=True))
+        profile = result.scalar_one()
+        if not profile.can_write_reviews:
+            raise HTTPException(403, "Для рецензий нужно получить 11 лайков под своими комментариями")
         review = Review(
             user_id=user_id,
             anime_source=review_data.anime_source,
             anime_external_id=review_data.anime_external_id,
             anime_title=review_data.anime_title,
             text=review_data.text,
+            title=review_data.title,
+            has_spoilers=review_data.has_spoilers,
             anime_rating=review_data.rating,
         )
         db.add(review)

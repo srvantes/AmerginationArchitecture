@@ -13,3 +13,4 @@ argon2-cffi==25.1.0
 anime-parsers-ru[async,lxml]==1.18.0
 requests==2.34.2
 beautifulsoup4==4.15.0
+httpx==0.28.1

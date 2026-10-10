@@ -6,6 +6,7 @@ from anime_parsers_ru import ShikimoriParserAsync
 
 from backend.core.cache import get_cached_json, set_cached_json
 from backend.core.config import settings
+from backend.services.upstream import run_async
 
 
 async def search_anime_cached(query: str, limit: int = 10):
@@ -18,9 +19,9 @@ async def search_anime_cached(query: str, limit: int = 10):
     parser = ShikimoriParserAsync(use_lxml=True)
 
     try:
-        results = await asyncio.wait_for(
-            parser.search(title=query.lower().strip()),
-            timeout=settings.EXTERNAL_SERVICE_TIMEOUT_SECONDS,
+        results = await run_async(
+            lambda: parser.search(title=query.lower().strip()),
+            provider="Shikimori",
         )
         await set_cached_json(cache_key, 86400, results)
         return results[:limit]
@@ -28,7 +29,7 @@ async def search_anime_cached(query: str, limit: int = 10):
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="Shikimori не ответил вовремя")
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Ошибка при попытке обратится к Shikimori: {e}")
+        raise HTTPException(status_code=502, detail="Поиск Shikimori временно недоступен")
 
     finally:
         await parser.close_async_session()
@@ -45,9 +46,9 @@ async def get_anime_details_cached(shikimori_link: str) -> dict:
     parser = ShikimoriParserAsync(use_lxml=True)
 
     try:
-        results = await asyncio.wait_for(
-            parser.anime_info(shikimori_link),
-            timeout=settings.EXTERNAL_SERVICE_TIMEOUT_SECONDS,
+        results = await run_async(
+            lambda: parser.anime_info(shikimori_link),
+            provider="Shikimori",
         )
 
         await set_cached_json(cached_key, 2592000, results)
@@ -57,7 +58,7 @@ async def get_anime_details_cached(shikimori_link: str) -> dict:
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="Shikimori не ответил вовремя")
     except Exception as e:
-        raise HTTPException(status_code=502, detail= f"Ошибка получения деталей об аниме: {e}")
+        raise HTTPException(status_code=502, detail= "Описание Shikimori временно недоступно")
 
     finally:
 

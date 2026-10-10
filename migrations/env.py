@@ -10,6 +10,8 @@ from backend.core.database import Base
 from backend.core.config import settings
 from backend.database.models.user import *
 from backend.database.models.anime import *
+from backend.database.models.watchlist import WatchlistEntry
+from backend.database.models.comment import Comment, CommentLike
 
 
 

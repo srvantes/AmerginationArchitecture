@@ -1,12 +1,82 @@
-from fastapi import Depends, APIRouter, HTTPException, status
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, List
 
 from backend.core.database import get_db
 from backend.core.security import get_current_user
+from backend.crud.user import crud_user
+from backend.crud.watchlist import crud_watchlist
+from backend.database.models.user import User
+from backend.database.sсhemas.watchlist import WatchlistCreate, WatchlistOut, WatchlistUpdate, WatchStatus
+
 
 router = APIRouter(tags=["users"])
 
-@router.get("/users/{user_id}/wishlist")
-async def get_wishlist():
-    pass
+
+@router.get("/me/watchlist", response_model=list[WatchlistOut])
+async def get_my_watchlist(
+    status: WatchStatus | None = None,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await crud_watchlist.list_entries(db, user.id, status, limit, offset)
+
+
+@router.post("/me/watchlist", response_model=WatchlistOut, status_code=201)
+async def add_to_watchlist(
+    data: WatchlistCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await crud_watchlist.create(db, user.id, data)
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Anime already exists in your watchlist")
+
+
+@router.patch("/me/watchlist/{entry_id}", response_model=WatchlistOut)
+async def update_watchlist_entry(
+    entry_id: UUID,
+    data: WatchlistUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    entry = await crud_watchlist.get_owned(db, user.id, entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Watchlist entry not found")
+    return await crud_watchlist.update(db, entry, data)
+
+
+@router.delete("/me/watchlist/{entry_id}", status_code=204)
+async def delete_watchlist_entry(
+    entry_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    entry = await crud_watchlist.get_owned(db, user.id, entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Watchlist entry not found")
+    await crud_watchlist.delete(db, entry)
+    return Response(status_code=204)
+
+
+@router.get("/{user_id}/watchlist", response_model=list[WatchlistOut])
+async def get_user_watchlist(
+    user_id: UUID,
+    status: WatchStatus | None = None,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    profile = await crud_user.get_user_profile(db, user_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user_id != user.id and not profile.show_watchlist:
+        raise HTTPException(status_code=403, detail="This watchlist is private")
+    return await crud_watchlist.list_entries(db, user_id, status, limit, offset)

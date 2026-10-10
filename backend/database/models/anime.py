@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 import uuid
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import Column, DateTime, Float, ForeignKey, String, Text, Boolean, UniqueConstraint, Index, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -11,6 +11,7 @@ from backend.core.database import Base
 class Review(Base):
     __tablename__ = "reviews"
     __table_args__ = (
+        Index("ix_reviews_anime_date", "anime_source", "anime_external_id", "date"),
         UniqueConstraint(
             "user_id",
             "anime_source",
@@ -28,7 +29,9 @@ class Review(Base):
     )
     anime_external_id = Column(String(100), nullable=False, index=True)
     anime_title = Column(String(200), nullable=False)
-    text = Column(String(6000), nullable=False)
+    title = Column(String(200), nullable=False, server_default="Рецензия")
+    text = Column(Text, nullable=False)
+    has_spoilers = Column(Boolean, nullable=False, default=False, server_default="false")
     anime_rating = Column(Float, nullable=True)
     date = Column(
         DateTime(timezone=True),
@@ -37,4 +40,8 @@ class Review(Base):
         nullable=False,
     )
 
-    user = relationship("User", back_populates="reviews")
+    user = relationship("User", back_populates="reviews", lazy="joined")
+
+    @property
+    def author_name(self):
+        return self.user.username

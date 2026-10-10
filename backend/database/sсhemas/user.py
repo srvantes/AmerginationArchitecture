@@ -19,10 +19,11 @@ class Badge(BaseBadge):
 class BaseUser(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     username: str = Field(..., min_length=3, max_length=40)
-    email: EmailStr
+    email: EmailStr = Field(..., max_length=100)
 
 
 class UserCreate(BaseUser):
+    username: str = Field(..., min_length=3, max_length=40, pattern=r"\S")
     password: str = Field(..., min_length=8, max_length=128)
 
 
@@ -56,6 +57,7 @@ class UserProfile(BaseModel):
     is_premium: bool
     is_active: bool
     show_watchlist: bool
+    can_write_reviews: bool
     created_at: datetime
     last_online: datetime
 

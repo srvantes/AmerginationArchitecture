@@ -3,6 +3,7 @@ import asyncio
 from fastapi import HTTPException
 from backend.core.cache import get_cached_json, set_cached_json
 from backend.core.config import settings
+from backend.services.upstream import run_async
 
 from anime_parsers_ru import KodikParserAsync
 
@@ -37,9 +38,9 @@ async def get_player_info_cached(shikimori_id: str) -> dict:
 
     try:
         # 3. Получаем информацию о сериях и переводах
-        info = await asyncio.wait_for(
-            parser.get_info(shikimori_id, "shikimori"),
-            timeout=settings.EXTERNAL_SERVICE_TIMEOUT_SECONDS,
+        info = await run_async(
+            lambda: parser.get_info(shikimori_id, "shikimori"),
+            provider="Kodik",
         )
 
         # 4. Кэшируем на 6 часов (21600 секунд)
@@ -52,7 +53,7 @@ async def get_player_info_cached(shikimori_id: str) -> dict:
     except Exception as e:
         raise HTTPException(
             status_code=502,
-            detail=f"Ошибка при получении информации о плеере: {str(e)}"
+            detail="Информация о плеере Kodik временно недоступна"
         )
     finally:
         await parser.close_async_session()
@@ -79,15 +80,15 @@ async def get_stream_url_cached(
 
     try:
         # 3. Получаем ссылку на m3u8 плейлист
-        m3u8_link = await asyncio.wait_for(
-            parser.get_m3u8_playlist_link(
+        m3u8_link = await run_async(
+            lambda: parser.get_m3u8_playlist_link(
                 id=shikimori_id,
                 id_type="shikimori",
                 seria_num=episode,
                 translation_id=translation_id,
                 quality=quality,
             ),
-            timeout=settings.EXTERNAL_SERVICE_TIMEOUT_SECONDS,
+            provider="Kodik",
         )
 
         result = {
@@ -106,7 +107,7 @@ async def get_stream_url_cached(
     except Exception as e:
         raise HTTPException(
             status_code=502,
-            detail=f"Ошибка при получении ссылки на видео: {str(e)}"
+            detail="Видеопоток Kodik временно недоступен"
         )
     finally:
         await parser.close_async_session()

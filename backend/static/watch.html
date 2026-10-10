@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Amergination — просмотр</title>
+<style>
+body{margin:0;background:#11131c;color:#edf0f8;font:16px system-ui}
+main{max-width:1100px;margin:40px auto;padding:0 24px}
+h1{font-size:30px}form{display:flex;gap:12px}input,select,button{font:inherit;border:1px solid #474c62;border-radius:8px;padding:12px;background:#202436;color:inherit}
+input{flex:1;min-width:0}button{cursor:pointer}button:disabled{opacity:.5;cursor:wait}
+#results{display:flex;flex-wrap:wrap;gap:10px;margin:24px 0}#results button{text-align:left}
+#choices{display:flex;flex-wrap:wrap;gap:20px;margin:20px 0}label{display:grid;gap:8px}
+iframe{width:100%;aspect-ratio:16/9;border:0;background:#000;border-radius:12px}
+#status{min-height:24px;color:#bdc5dc}#status.error{color:#ffa6a6}
+[hidden]{display:none!important}
+</style>
+<main>
+<h1>Amergination</h1>
+<form id="search"><input id="query" aria-label="Название аниме" placeholder="Название аниме" required minlength="2"><button id="find">Найти</button></form>
+<p id="status" role="status">Найдите аниме, выберите серию и озвучку.</p>
+<div id="results"></div>
+<section id="selection" hidden>
+<h2 id="title"></h2>
+<div id="choices">
+<label>Серия<select id="episodes"></select></label>
+<label>Озвучка<select id="voices"></select></label>
+<button id="play" disabled>Смотреть</button>
+</div>
+<iframe id="video" title="Видеоплеер" hidden allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation"></iframe>
+</section>
+</main>
+<script>
+const byId=id=>document.getElementById(id);
+let animeId=null,translations=[],revision=0;
+function status(message,error=false){byId('status').textContent=message;byId('status').classList.toggle('error',error)}
+function stop(){byId('video').hidden=true;byId('video').removeAttribute('src')}
+async function api(path,params){
+ const r=await fetch('/api/v1/anime/animego/'+path+'?'+new URLSearchParams(params));
+ const data=await r.json();
+ if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'Не удалось загрузить данные');
+ return data;
+}
+function options(select,values){select.replaceChildren(...values.map(([value,label])=>{const o=document.createElement('option');o.value=value;o.textContent=label;return o}))}
+async function loadVoices(version){
+ const data=await api('voices',{anime_id:animeId,episode:byId('episodes').value});
+ if(version!==revision)return;
+ translations=data.translations.filter(v=>['kodik','sibnet','aniboom','cvh'].includes(v.player)&&v.embed_url);
+ options(byId('voices'),translations.map((v,i)=>[i,v.name+' · '+v.player]));
+ byId('play').disabled=!translations.length;
+ status(translations.length?'Выберите озвучку и нажмите «Смотреть».':'Для этой серии нет доступных плееров.');
+}
+async function selectAnime(card){
+ const version=++revision;animeId=card.external_id;stop();byId('selection').hidden=false;byId('title').textContent=card.title;
+ byId('play').disabled=true;options(byId('episodes'),[]);options(byId('voices'),[]);
+ status('Загружаем серии…');
+ try{
+  const data=await api('episodes',{anime_id:animeId});
+  if(version!==revision)return;
+  options(byId('episodes'),data.episodes.length?data.episodes.map(e=>[e.number,'Серия '+e.number]):[[1,'Эпизод 1']]);
+  await loadVoices(version);
+ }catch(e){if(version===revision)status(e.message,true)}
+}
+byId('search').addEventListener('submit',async e=>{
+ e.preventDefault();const version=++revision;stop();byId('selection').hidden=true;byId('results').replaceChildren();byId('find').disabled=true;status('Ищем…');
+ try{
+  const cards=await api('search',{q:byId('query').value.trim()});
+  if(version!==revision)return;
+  cards.forEach(card=>{const b=document.createElement('button');b.textContent=card.title+(card.year?' · '+card.year:'');b.onclick=()=>selectAnime(card);byId('results').append(b)});
+  status(cards.length?'Выберите аниме.':'Ничего не найдено.');
+ }catch(e){if(version===revision)status(e.message,true)}
+ finally{byId('find').disabled=false}
+});
+byId('episodes').addEventListener('change',async()=>{
+ const version=++revision;stop();byId('play').disabled=true;status('Загружаем озвучки…');
+ try{await loadVoices(version)}catch(e){if(version===revision)status(e.message,true)}
+});
+byId('voices').addEventListener('change',()=>{++revision;stop();byId('play').disabled=!translations.length});
+byId('play').addEventListener('click',async()=>{
+ const voice=translations[Number(byId('voices').value)];if(!voice)return;
+ const version=++revision;byId('play').disabled=true;stop();status('Открываем плеер…');
+ try{
+  const data=await api('player',{anime_id:animeId,episode:byId('episodes').value,translation_id:voice.id,player:voice.player});
+  if(version!==revision)return;
+  byId('video').src=data.embed_url;byId('video').hidden=false;status('Плеер открыт. Нажмите воспроизведение внутри видео.');
+ }catch(e){if(version===revision)status(e.message,true)}
+ finally{if(version===revision)byId('play').disabled=false}
+});
+</script>
+</html>
