@@ -2,28 +2,43 @@
 let dsToken = sessionStorage.getItem('amergination-token'), dsUser = null, dsRegister = false;
 let dsAccess = null, dsVersion = 0, dsEditing = {comments: null, reviews: null};
 let dsData = {comments: {items: [], total: 0}, reviews: {items: [], total: 0}};
+let dsCodeDeadline = 0, dsResendDeadline = 0, dsCodeTimer, dsVerifyBusy = false, dsCodeAttempts = 5;
 let dsDrafts = {comments: null, reviews: null};
 const dsWords = value => (value.match(/\S+/gu) || []).filter(word => /[\p{L}\p{N}]/u.test(word)).length;
 
 async function dsApi(path, options = {}) {
- const headers = {'Content-Type': 'application/json', ...(dsToken ? {Authorization: 'Bearer ' + dsToken} : {})};
+ const headers = {'Content-Type': 'application/json', ...options.headers, ...(dsToken ? {Authorization: 'Bearer ' + dsToken} : {})};
  const response = await fetch('/api/v1/' + path, {...options, headers});
  if (response.status === 204) return null;
  const data = await response.json();
  if (!response.ok) {
   if (response.status === 401) { dsToken = null; dsUser = null; dsAccess = null; dsDrafts = {comments: null, reviews: null}; sessionStorage.removeItem('amergination-token'); dsAuthView(); dsRenderForms(); }
-  throw Error(typeof data.detail === 'string' ? data.detail : data.detail?.[0]?.msg?.replace(/^Value error, /, '') || 'Не удалось выполнить действие. Попробуйте ещё раз.');
+  const error = Error(typeof data.detail === 'string' ? data.detail : data.detail?.[0]?.msg?.replace(/^Value error, /, '') || 'Не удалось выполнить действие. Попробуйте ещё раз.');
+  error.status = response.status; error.retryAfter = Number(response.headers.get('Retry-After')) || 0; throw error;
  }
  return data;
 }
 function dsAuthView() {
- $('open-auth').querySelector('span').textContent = dsUser ? dsUser.username : 'Войти';
- $('auth-form').hidden = !!dsUser; $('auth-switch').hidden = !!dsUser; $('auth-logout').hidden = !dsUser;
- $('auth-status').textContent = dsUser ? 'Вы вошли как ' + dsUser.username : '';
+ window.watchlistAuthChanged?.();
+ $('open-auth').querySelector('.account-name').textContent = dsUser ? (dsUser.email_verified ? dsUser.username : 'Подтвердить почту') : 'Войти';
+ const resetting = !!window.passwordResetActive;
+ $('auth-form').hidden = !!dsUser || resetting; $('auth-switch').hidden = !!dsUser || resetting; $('auth-logout').hidden = !dsUser || resetting;
+ $('auth-forgot').hidden = !!dsUser || resetting;
+ $('email-verification').hidden = !dsUser || dsUser.email_verified || resetting;
+ $('verification-email').textContent = dsUser?.email || '';
+ if (dsUser && !dsUser.email_verified && !$('auth-dialog').open) $('auth-dialog').showModal();
+ if (!dsUser || dsUser.email_verified) clearInterval(dsCodeTimer);
+ $('auth-status').textContent = dsUser ? (dsUser.email_verified ? 'Вы вошли как ' + dsUser.username : 'До подтверждения почты комментарии, лайки и рецензии недоступны.') : '';
+ window.accountAuthChanged?.();
 }
 async function dsRestore() {
  if (!dsToken) return;
- try { dsUser = await dsApi('auth/me'); dsAccess = await dsApi('comments/eligibility'); dsAuthView(); if (window.discussionAnime) await dsReload(); }
+ try {
+  dsUser = await dsApi('auth/me'); dsAuthView();
+  if (!dsUser.email_verified) await dsVerificationStatus();
+  dsAccess = await dsApi('comments/eligibility');
+  if (window.discussionAnime) await dsReload();
+ }
  catch (error) { $('auth-status').textContent = error.message; }
 }
 $('auth-switch').addEventListener('click', () => {
@@ -39,14 +54,15 @@ $('auth-form').addEventListener('submit', async event => {
   if (dsRegister) await dsApi('auth/register', {method: 'POST', body: JSON.stringify({...credentials, email: $('auth-email').value.trim()})});
   const token = await dsApi('auth/login', {method: 'POST', body: JSON.stringify(credentials)});
   dsToken = token.access_token; sessionStorage.setItem('amergination-token', dsToken);
-  $('auth-password').value = ''; await dsRestore(); if (dsUser) $('auth-dialog').close();
+  $('auth-password').value = ''; await dsRestore(); if (dsUser?.email_verified) $('auth-dialog').close();
  } catch (error) { $('auth-status').textContent = error.message; }
  finally { $('auth-submit').disabled = false; }
 });
-$('auth-logout').addEventListener('click', async () => {
- try { await dsApi('auth/logout', {method: 'POST'}); dsToken = null; dsUser = null; dsAccess = null; dsDrafts = {comments: null, reviews: null}; sessionStorage.removeItem('amergination-token'); dsEditing = {comments: null, reviews: null}; dsAuthView(); $('auth-dialog').close(); if (window.discussionAnime) await dsReload(); }
- catch (error) { $('auth-status').textContent = error.message; }
-});
+async function dsLogout() {
+ try { await dsApi('auth/logout', {method: 'POST'}); dsToken = null; dsUser = null; dsAccess = null; dsDrafts = {comments: null, reviews: null}; sessionStorage.removeItem('amergination-token'); dsEditing = {comments: null, reviews: null}; dsAuthView(); $('auth-dialog').close(); if (window.discussionAnime) await dsReload(); return true; }
+ catch (error) { $('auth-status').textContent = error.message; toast(error.message); return false; }
+}
+$('auth-logout').addEventListener('click', dsLogout);
 function dsButton(label, action, className = 'secondary-button') {
  const button = text('button', label, className); button.type = 'button';
  button.addEventListener('click', async () => { button.disabled = true; try { await action(); } catch (error) { toast(error.message); } finally { button.disabled = false; } });
@@ -59,6 +75,7 @@ function dsRenderForms() {
  for (const kind of ['comments', 'reviews']) {
   const area = $(kind + '-form-area'); area.replaceChildren();
   if (!dsUser) { area.append(text('p', kind === 'comments' ? 'Войдите, чтобы оставлять комментарии и лайки.' : 'Право на рецензии открывается после 11 лайков под вашими комментариями.', 'subtle'), dsButton('Войти', dsShowAuth)); continue; }
+  if (!dsUser.email_verified) { area.append(text('p', 'Подтвердите почту, чтобы участвовать в обсуждении.', 'subtle'), dsButton('Подтвердить почту', dsShowAuth)); continue; }
   if (kind === 'reviews' && !dsAccess?.can_write_reviews && !dsEditing.reviews) { area.append(text('p', `Для рецензий нужно получить 11 лайков под комментариями. Сейчас: ${dsAccess?.likes_received ?? 0}. Достигнутый доступ сохраняется.`, 'subtle')); continue; }
   const editing = dsEditing[kind], own = dsData[kind].items.find(item => item.user_id === dsUser.id);
   const draft = dsDrafts[kind]?.editingId === (editing?.id || 'new') ? dsDrafts[kind] : null;
@@ -107,7 +124,7 @@ function dsRenderList(kind) {
   const actions = text('div', '', 'discussion-actions'); article.append(actions);
   if (kind === 'comments') {
    const like = dsButton((item.liked_by_me ? '♥ ' : '♡ ') + item.likes_count, async () => {
-    if (!dsUser) { dsShowAuth(); return; }
+    if (!dsUser || !dsUser.email_verified) { dsShowAuth(); return; }
     const updated = await dsApi('comments/' + item.id + '/like', {method: item.liked_by_me ? 'DELETE' : 'PUT'});
     Object.assign(item, updated); dsRenderList(kind);
    }); like.setAttribute('aria-label', (item.liked_by_me ? 'Убрать лайк' : 'Поставить лайк') + ': ' + item.likes_count);
@@ -140,3 +157,32 @@ for (const kind of ['comments', 'reviews']) $(kind + '-more').addEventListener('
 window.addEventListener('anime-detail', dsReload);
 if (window.discussionAnime) dsReload();
 dsRestore();
+
+
+function dsVerificationClock() {
+ const expires = Math.max(0, Math.ceil((dsCodeDeadline - Date.now()) / 1000));
+ const resend = Math.max(0, Math.ceil((dsResendDeadline - Date.now()) / 1000));
+ $('verification-timer').textContent = expires ? `Код действует ещё ${expires} сек. Осталось попыток: ${dsCodeAttempts}.` : 'Код истёк или не отправлен. Запросите новый код.';
+ $('verification-resend').textContent = resend ? `Новый код через ${resend} сек.` : 'Отправить новый код';
+ $('verification-resend').disabled = dsVerifyBusy || resend > 0;
+ $('verification-submit').disabled = dsVerifyBusy || expires === 0 || dsCodeAttempts === 0;
+}
+function dsSetVerificationTime(data) {
+ dsCodeDeadline = Date.now() + data.expires_in_seconds * 1000;
+ dsResendDeadline = Date.now() + data.resend_after_seconds * 1000;
+ dsCodeAttempts = data.attempts_remaining ?? 5;
+ clearInterval(dsCodeTimer); dsCodeTimer = setInterval(dsVerificationClock, 1000); dsVerificationClock();
+}
+async function dsVerificationStatus() { dsSetVerificationTime(await dsApi('auth/email/status')); }
+$('verification-form').addEventListener('submit', async event => {
+ event.preventDefault(); dsVerifyBusy = true; dsVerificationClock(); $('auth-status').textContent = 'Проверяем код…';
+ try { await dsApi('auth/email/verify', {method: 'POST', body: JSON.stringify({code: $('verification-code').value})}); $('verification-code').value = ''; await dsRestore(); $('auth-dialog').close(); toast('Почта подтверждена'); }
+ catch (error) { $('auth-status').textContent = error.message; try { await dsVerificationStatus(); } catch {} }
+ finally { dsVerifyBusy = false; dsVerificationClock(); }
+});
+$('verification-resend').addEventListener('click', async () => {
+ dsVerifyBusy = true; dsVerificationClock(); $('auth-status').textContent = 'Отправляем письмо…';
+ try { const data = await dsApi('auth/email/resend', {method: 'POST'}); $('verification-code').value = ''; dsSetVerificationTime(data); $('auth-status').textContent = 'Новый код отправлен. Проверьте также папку «Спам».'; }
+ catch (error) { if (error.retryAfter) dsResendDeadline = Date.now() + error.retryAfter * 1000; $('auth-status').textContent = error.message; }
+ finally { dsVerifyBusy = false; dsVerificationClock(); }
+});

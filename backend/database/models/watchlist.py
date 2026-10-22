@@ -20,6 +20,8 @@ class WatchlistEntry(Base):
     anime_source = Column(String(30), nullable=False, default="shikimori", server_default="shikimori")
     anime_external_id = Column(String(100), nullable=False)
     anime_title = Column(String(200), nullable=False)
+    poster_url = Column(String(2048), nullable=True)
+    anime_slug = Column(String(300), nullable=True)
     status = Column(String(20), nullable=False, default="planned", server_default="planned")
     episodes_watched = Column(Integer, nullable=False, default=0, server_default="0")
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

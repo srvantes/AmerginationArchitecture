@@ -67,7 +67,7 @@ def credentials_exception() -> HTTPException:
     )
 
 
-def create_access_token(user_id: UUID, expires_delta: timedelta | None = None) -> str:
+def create_access_token(user_id: UUID, expires_delta: timedelta | None = None, token_version: int = 0) -> str:
     now = datetime.now(timezone.utc)
     expires_at = now + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
     payload = {
@@ -76,6 +76,7 @@ def create_access_token(user_id: UUID, expires_delta: timedelta | None = None) -
         "type": "access",
         "iat": now,
         "exp": expires_at,
+        "v": token_version,
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
@@ -131,6 +132,15 @@ async def get_current_user(
     user = await crud_user.get_by_id(db, UUID(payload["sub"]))
     if user is None or user.profile is None or not user.profile.is_active:
         raise credentials_exception()
+    version = payload.get("v", 0)
+    if type(version) is not int or version != user.auth_version:
+        raise credentials_exception()
+    return user
+
+
+async def get_verified_user(user: User = Depends(get_current_user)) -> User:
+    if not user.email_verified:
+        raise HTTPException(403, "Подтвердите почту, чтобы публиковать тексты и ставить лайки")
     return user
 
 

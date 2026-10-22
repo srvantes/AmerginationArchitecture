@@ -31,7 +31,7 @@ class AuthenticationTests(DatabaseAPITestCase):
     def test_registration_creates_user_profile_and_hashes_password(self):
         response = self.register()
         self.assertEqual(response.status_code, 201, response.text)
-        self.assertEqual(set(response.json()), {"id", "username", "email"})
+        self.assertEqual(set(response.json()), {"id", "username", "email", "email_verified"})
         with Session(self.engine) as session:
             user = session.get(User, UUID(response.json()["id"]))
             self.assertIsNotNone(user.profile)

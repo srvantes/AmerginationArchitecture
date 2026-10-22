@@ -5,6 +5,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.database import get_db
 from backend.core.security import get_current_user
+from backend.core.rate_limit import limited_comment_create, limited_discussion_edit, limited_like, RATE_LIMIT_RESPONSES
 from backend.database.models.comment import Comment
 from backend.database.models.user import User
 from backend.database.sсhemas.discussion import CommentCreate, CommentUpdate, AnimeSource, AnimeId
@@ -33,8 +34,8 @@ async def list_comments(anime_source: AnimeSource, anime_external_id: AnimeId,
         db, anime_source, anime_external_id, viewer=user.id if user else None, limit=limit, offset=offset)}
 
 
-@router.post("/", status_code=201)
-async def create_comment(data: CommentCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@router.post("/", status_code=201, responses=RATE_LIMIT_RESPONSES)
+async def create_comment(data: CommentCreate, user: User = Depends(limited_comment_create), db: AsyncSession = Depends(get_db)):
     item = Comment(user_id=user.id, **data.model_dump())
     db.add(item)
     await db.commit()
@@ -42,8 +43,8 @@ async def create_comment(data: CommentCreate, user: User = Depends(get_current_u
     return (await comment_rows(db, comment_id=item.id, viewer=user.id))[0]
 
 
-@router.patch("/{comment_id}")
-async def edit_comment(comment_id: UUID, data: CommentUpdate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@router.patch("/{comment_id}", responses=RATE_LIMIT_RESPONSES)
+async def edit_comment(comment_id: UUID, data: CommentUpdate, user: User = Depends(limited_discussion_edit), db: AsyncSession = Depends(get_db)):
     item = await comment_by_id(db, comment_id)
     if item.user_id != user.id:
         raise HTTPException(403, "Можно редактировать только свои комментарии")
@@ -52,8 +53,8 @@ async def edit_comment(comment_id: UUID, data: CommentUpdate, user: User = Depen
     return (await comment_rows(db, comment_id=comment_id, viewer=user.id))[0]
 
 
-@router.delete("/{comment_id}", status_code=204)
-async def remove_comment(comment_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@router.delete("/{comment_id}", status_code=204, responses=RATE_LIMIT_RESPONSES)
+async def remove_comment(comment_id: UUID, user: User = Depends(limited_discussion_edit), db: AsyncSession = Depends(get_db)):
     item = await comment_by_id(db, comment_id)
     if item.user_id != user.id:
         raise HTTPException(403, "Можно удалять только свои комментарии")
@@ -64,11 +65,11 @@ async def remove_comment(comment_id: UUID, user: User = Depends(get_current_user
     return Response(status_code=204)
 
 
-@router.put("/{comment_id}/like")
-async def like_comment(comment_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@router.put("/{comment_id}/like", responses=RATE_LIMIT_RESPONSES)
+async def like_comment(comment_id: UUID, user: User = Depends(limited_like), db: AsyncSession = Depends(get_db)):
     return await change_like(db, comment_id, user.id, True)
 
 
-@router.delete("/{comment_id}/like")
-async def unlike_comment(comment_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@router.delete("/{comment_id}/like", responses=RATE_LIMIT_RESPONSES)
+async def unlike_comment(comment_id: UUID, user: User = Depends(limited_like), db: AsyncSession = Depends(get_db)):
     return await change_like(db, comment_id, user.id, False)

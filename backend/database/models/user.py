@@ -15,6 +15,12 @@ class User(Base):
     username = Column(String(40), unique=True, index=True, nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
+    email_verified_at = Column(DateTime(timezone=True), nullable=True)
+    auth_version = Column(Integer, nullable=False, default=0, server_default="0")
+
+    @property
+    def email_verified(self):
+        return self.email_verified_at is not None
 
 
 

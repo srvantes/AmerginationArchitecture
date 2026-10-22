@@ -4,6 +4,7 @@ The adapter exposes async session calls for synchronous SQLite. PostgreSQL
 migration execution and asyncpg still require a separate integration run.
 """
 import unittest
+from datetime import datetime, timezone
 from importlib import import_module
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
@@ -16,10 +17,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from backend.core.database import get_db
+from backend.core.rate_limit import get_rate_limiter
 from backend.core.password import get_password_hash
 from backend.core.security import create_access_token
 from backend.database.models.user import User, UserProfile
 from backend.database.models.watchlist import WatchlistEntry
+from backend.database.models.anime import Review
 from main import app
 
 
@@ -68,12 +71,16 @@ class DatabaseAPITestCase(unittest.TestCase):
                 import_module("migrations.versions.0001_initial").upgrade()
                 import_module("migrations.versions.0002_watchlist").upgrade()
                 import_module("migrations.versions.0003_discussion").upgrade()
+                import_module("migrations.versions.0004_email_verification").upgrade()
+                import_module("migrations.versions.0005_password_reset").upgrade()
+                import_module("migrations.versions.0006_watchlist_posters").upgrade()
         self.owner_id, self.other_id = uuid4(), uuid4()
         with Session(self.engine) as session:
             for user_id, name in [(self.owner_id, "owner"), (self.other_id, "other")]:
                 session.add(User(
                     id=user_id, username=name, email=f"{name}@example.com",
                     hashed_password=self.password_hash, profile=UserProfile(id=user_id),
+                    email_verified_at=datetime.now(timezone.utc),
                 ))
             session.commit()
 
@@ -87,6 +94,7 @@ class DatabaseAPITestCase(unittest.TestCase):
 
         self.previous_overrides = app.dependency_overrides.copy()
         app.dependency_overrides[get_db] = test_db
+        app.dependency_overrides[get_rate_limiter] = lambda: AsyncMock()
         self.revoked = set()
 
         async def revoke(key, ttl, value):
@@ -97,13 +105,22 @@ class DatabaseAPITestCase(unittest.TestCase):
         self.redis.setex.side_effect = revoke
         self.redis_patch = patch("backend.core.security.redis_client", self.redis)
         self.redis_patch.start()
+        self.mail_patch = patch("backend.services.email_verification.send_verification_email", AsyncMock())
+        self.mail_patch.start()
+        self.reset_mail_patch = patch("backend.services.password_reset.send_password_reset_email", AsyncMock())
+        self.reset_mail_patch.start()
+        self.progress_cache_patch = patch("backend.services.watch_progress.get_cached_json", AsyncMock(return_value=None))
+        self.progress_cache_patch.start()
         self.client = TestClient(app)
         self.owner_headers = {"Authorization": f"Bearer {create_access_token(self.owner_id)}"}
         self.other_headers = {"Authorization": f"Bearer {create_access_token(self.other_id)}"}
 
     def tearDown(self):
+        self.progress_cache_patch.stop()
         self.client.close()
         self.redis_patch.stop()
+        self.mail_patch.stop()
+        self.reset_mail_patch.stop()
         app.dependency_overrides.clear()
         app.dependency_overrides.update(self.previous_overrides)
         self.engine.dispose()
@@ -139,6 +156,25 @@ class WatchlistTests(DatabaseAPITestCase):
         self.assertEqual(response.content, b"")
         self.assertEqual(self.client.get(self.path, headers=self.owner_headers).json(), [])
 
+    def test_profile_summary_counts_all_entries_and_scopes_owner(self):
+        for index in range(22):
+            self.add_entry(anime_id=str(index), status="completed", episodes_watched=12)
+        self.add_entry(anime_id="watch", status="watching", episodes_watched=3)
+        self.add_entry(anime_id="other", headers=self.other_headers, status="completed", episodes_watched=999)
+        with Session(self.engine) as session:
+            for user_id in (self.owner_id, self.other_id):
+                session.add(Review(user_id=user_id, anime_external_id="20", anime_title="Naruto", text="Рецензия"))
+            session.commit()
+        response = self.client.get(self.path + "/summary", headers=self.owner_headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = response.json()
+        self.assertEqual(data["total"], 23)
+        self.assertEqual(data["completed"], 22)
+        self.assertEqual(data["episodes_watched"], 267)
+        self.assertEqual(data["reviews_written"], 1)
+        self.assertEqual([item["anime_external_id"] for item in data["watching"]], ["watch"])
+        self.assertEqual(self.client.get(self.path + "/summary").status_code, 401)
+
     def test_duplicate_conflict_and_source_identity(self):
         self.add_entry()
         duplicate = self.client.post(
@@ -149,6 +185,58 @@ class WatchlistTests(DatabaseAPITestCase):
         self.add_entry(anime_source="animego")
         self.add_entry(headers=self.other_headers)
         self.assertEqual(len(self.client.get(self.path, headers=self.owner_headers).json()), 2)
+
+    def test_posters_and_navigation_survive_missing_cache(self):
+        self.add_entry(anime_source="animego", poster_url="https://example.com/poster.jpg", anime_slug="naruto")
+        stored = self.client.get(self.path, headers=self.owner_headers).json()[0]
+        self.assertEqual(stored["poster_url"], "https://example.com/poster.jpg")
+        self.assertEqual(stored["anime_slug"], "naruto")
+        invalid = self.client.post(self.path, headers=self.owner_headers, json={
+            "anime_external_id": "new", "anime_title": "New", "poster_url": "javascript:alert(1)",
+        })
+        self.assertEqual(invalid.status_code, 422)
+
+    def test_progress_bounds_ownership_and_statistics(self):
+        with patch("backend.services.watch_progress.known_episode_total", AsyncMock(return_value=12)):
+            entry = self.add_entry()
+            path = self.path + "/" + entry["id"]
+            response = self.client.patch(path, headers=self.owner_headers,
+                                         json={"episodes_watched": 13, "status": "completed"})
+            self.assertEqual(response.status_code, 422)
+            stored = self.client.get(self.path, headers=self.owner_headers).json()[0]
+            self.assertEqual(stored["episodes_watched"], 0)
+            self.assertEqual(stored["status"], "planned")
+            self.assertEqual(stored["episodes_total"], 12)
+            self.assertEqual(self.client.patch(path, headers=self.other_headers, json={"episodes_watched": 1}).status_code, 404)
+            response = self.client.patch(path, headers=self.owner_headers, json={"episodes_watched": 12})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["status"], "planned")
+            for invalid in (-1, 1.5, True, "3"):
+                self.assertEqual(self.client.patch(path, headers=self.owner_headers, json={"episodes_watched": invalid}).status_code, 422)
+            self.assertEqual(self.client.patch(path, headers=self.owner_headers, json={"episodes_total": 999}).status_code, 422)
+            response = self.client.patch(path, headers=self.owner_headers, json={"episodes_watched": 3})
+            self.assertEqual(response.status_code, 200)
+            summary = self.client.get(self.path + "/summary", headers=self.owner_headers).json()
+            self.assertEqual(summary["episodes_watched"], 3)
+            self.assertEqual(summary["completed"], 0)
+            too_many = self.client.post(self.path, headers=self.owner_headers,
+                                        json={"anime_external_id": "new", "anime_title": "New", "episodes_watched": 13})
+            self.assertEqual(too_many.status_code, 422)
+
+    def test_exact_anime_filter_is_source_and_owner_scoped(self):
+        wanted = self.add_entry(anime_id="20", anime_source="animego")
+        self.add_entry(anime_id="20")
+        self.add_entry(anime_id="200", anime_source="animego")
+        self.add_entry(anime_id="20", anime_source="animego", headers=self.other_headers)
+        response = self.client.get(self.path, headers=self.owner_headers, params={
+            "anime_source": "animego", "anime_external_id": "20", "limit": 1,
+        })
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual([item["id"] for item in response.json()], [wanted["id"]])
+        response = self.client.get(self.path, headers=self.owner_headers, params={
+            "anime_source": "animego", "anime_external_id": "missing",
+        })
+        self.assertEqual(response.json(), [])
 
     def test_other_user_cannot_modify_or_delete_entry(self):
         entry = self.add_entry()
@@ -236,6 +324,7 @@ class WatchlistTests(DatabaseAPITestCase):
                 self.assertNotIn("watchlist_entries", inspect(connection).get_table_names())
                 self.assertIn("users", inspect(connection).get_table_names())
                 migration.upgrade()
+                import_module("migrations.versions.0006_watchlist_posters").upgrade()
         self.add_entry()
 
     def test_deleting_user_cascades_to_watchlist(self):

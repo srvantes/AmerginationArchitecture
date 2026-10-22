@@ -4,6 +4,8 @@ let catalog = [], translations = [], playerVersion = 0, searchVersion = 0, toast
 const pageRoute = location.pathname.match(/^\/anime\/(?:(shikimori|animego)\/)?([0-9]+)$/);
 const pageId = pageRoute?.[2], pageSource = pageRoute?.[1] ?? 'animego';
 let playbackId = null;
+const listPage = location.pathname === '/my-list';
+const profilePage = location.pathname === '/profile';
 function text(tag, value, className) { const el = document.createElement(tag); el.textContent = value; if (className) el.className = className; return el; }
 function safeUrl(value) { try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) ? url.href : null; } catch { return null; } }
 function normalize(card) { return { id: String(card.id ?? card.external_id), title: card.title, original: card.original_title, image: safeUrl(card.image ?? card.poster_url), year: card.year, kind: card.type ?? card.kind, score: card.rating ?? card.score, source: card.source ?? 'animego', slug: card.slug, genres: card.genres ?? [], relation: card.relation }; }
@@ -46,6 +48,8 @@ async function catalogApi(path, params = {}) {
  return data;
 }
 function renderDetail(page) {
+ window.watchlistAnime = {source: page.details.source, id: String(page.details.external_id), title: page.details.title, episodes_total:page.details.episodes_total || null, poster_url:page.details.poster_url, slug:page.details.slug};
+ window.dispatchEvent(new Event('watchlist-anime'));
  window.discussionAnime = {source: page.details.source, id: page.details.external_id, title: page.details.title};
  window.dispatchEvent(new Event('anime-detail'));
  const card = normalize(page.details);
@@ -67,6 +71,8 @@ function renderDetail(page) {
  }
 }
 async function init() {
+ if (profilePage) { $('home').hidden = true; $('profile-page').hidden = false; document.title = 'Профиль — Amergination'; return; }
+ if (listPage) { $('home').hidden = true; $('my-list-page').hidden = false; document.title = 'Мой список — Amergination'; return; }
  if (pageId) {
   $('home').hidden = true; $('anime-page').hidden = false; $('detail-title').textContent = 'Загружаем аниме…';
   try {
@@ -89,7 +95,7 @@ async function init() {
 }
 document.querySelectorAll('[data-scroll]').forEach(button => button.addEventListener('click', () => $(button.dataset.scroll).scrollBy({ left: Number(button.dataset.direction) * $(button.dataset.scroll).clientWidth * .75, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })));
 $('open-search').addEventListener('click', () => { $('search-dialog').showModal(); $('search-input').focus(); });
-$('open-auth').addEventListener('click', () => $('auth-dialog').showModal());
+$('open-auth').addEventListener('click', () => window.openAccount ? window.openAccount() : $('auth-dialog').showModal());
 document.querySelectorAll('.discussion-auth').forEach(button => button.addEventListener('click', () => $('auth-dialog').showModal()));
 document.querySelectorAll('.close-dialog').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
 document.querySelectorAll('dialog').forEach(dialog => dialog.addEventListener('click', event => { const rect = dialog.getBoundingClientRect(); if (event.target === dialog && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) dialog.close(); }));
@@ -99,7 +105,6 @@ $('search-form').addEventListener('submit', async event => {
  catch (error) { if (version === searchVersion) $('search-status').textContent = error.message; }
 });
 
-$('add-list').addEventListener('click', () => toast('Добавление в список на этой странице пока не подключено.'));
 $('episode-select').addEventListener('change', async () => { const version = ++playerVersion; stopPlayer(); $('player-status').textContent = 'Загружаем озвучки…'; try { await loadVoices(version); } catch (error) { if (version === playerVersion) $('player-status').textContent = error.message; } });
 $('voice-select').addEventListener('change', () => { ++playerVersion; stopPlayer(); $('start-player').disabled = !translations.length; });
 $('start-player').addEventListener('click', async () => {

@@ -14,3 +14,4 @@ anime-parsers-ru[async,lxml]==1.18.0
 requests==2.34.2
 beautifulsoup4==4.15.0
 httpx==0.28.1
+Pillow==11.3.0

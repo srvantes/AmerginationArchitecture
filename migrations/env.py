@@ -12,6 +12,8 @@ from backend.database.models.user import *
 from backend.database.models.anime import *
 from backend.database.models.watchlist import WatchlistEntry
 from backend.database.models.comment import Comment, CommentLike
+from backend.database.models.email_verification import EmailVerification
+from backend.database.models.password_reset import PasswordReset
 
 
 

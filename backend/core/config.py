@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -22,6 +22,22 @@ class Settings(BaseSettings):
     EXTERNAL_READ_TIMEOUT_SECONDS: float = Field(default=5.0, gt=0, le=60)
     EXTERNAL_SERVICE_ATTEMPTS: int = Field(default=2, ge=1, le=3)
     EXTERNAL_RETRY_MAX_DELAY_SECONDS: float = Field(default=2.0, ge=0, le=5)
+
+    REGISTRATION_LIMIT_PER_HOUR: int = Field(default=3, ge=1, le=10000)
+    LOGIN_LIMIT_PER_5_MINUTES: int = Field(default=30, ge=1, le=10000)
+    LOGIN_ACCOUNT_LIMIT_PER_5_MINUTES: int = Field(default=10, ge=1, le=10000)
+    COMMENT_LIMIT_PER_HOUR: int = Field(default=20, ge=1, le=10000)
+    COMMENT_COOLDOWN_SECONDS: int = Field(default=15, ge=1, le=3600)
+    LIKE_LIMIT_PER_MINUTE: int = Field(default=30, ge=1, le=10000)
+    DISCUSSION_EDIT_LIMIT_PER_MINUTE: int = Field(default=30, ge=1, le=10000)
+    REVIEW_LIMIT_PER_HOUR: int = Field(default=5, ge=1, le=10000)
+    EMAIL_SEND_LIMIT_PER_HOUR: int = Field(default=5, ge=1, le=10000)
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = Field(default=465, ge=1, le=65535)
+    SMTP_USERNAME: str | None = None
+    SMTP_PASSWORD: SecretStr | None = None
+    SMTP_FROM_EMAIL: str | None = None
+    SMTP_TIMEOUT_SECONDS: float = Field(default=10, gt=0, le=30)
 
     # Redis
     REDIS_HOST: str = "localhost"

@@ -1,7 +1,7 @@
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -24,7 +24,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         return result.scalar_one_or_none()
 
     async def get_by_email(self, db: AsyncSession, email: str) -> Optional[User]:
-        result = await db.execute(self._with_profile().where(User.email == email))
+        result = await db.execute(self._with_profile().where(func.lower(User.email) == email.strip().lower()))
         return result.scalar_one_or_none()
 
     async def get_by_username(self, db: AsyncSession, username: str) -> Optional[User]:
@@ -33,7 +33,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
 
     async def get_user_by_email_or_username(self, db: AsyncSession, login: str) -> Optional[User]:
         result = await db.execute(
-            self._with_profile().where(or_(User.email == login, User.username == login))
+            self._with_profile().where(or_(func.lower(User.email) == login.strip().lower(), User.username == login))
         )
         return result.scalar_one_or_none()
 

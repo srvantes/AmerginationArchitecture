@@ -1,19 +1,39 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database.models.watchlist import WatchlistEntry
+from backend.database.models.anime import Review
 from backend.database.sсhemas.watchlist import WatchlistCreate, WatchlistUpdate, WatchStatus
 
 
 class CRUDWatchlist:
+    async def summary(self, db: AsyncSession, user_id: UUID) -> dict:
+        result = await db.execute(select(
+            func.count(WatchlistEntry.id),
+            func.coalesce(func.sum(case((WatchlistEntry.status == "completed", 1), else_=0)), 0),
+            func.coalesce(func.sum(WatchlistEntry.episodes_watched), 0),
+        ).where(WatchlistEntry.user_id == user_id))
+        total, completed, episodes = result.one()
+        reviews = await db.execute(select(func.count(Review.id)).where(Review.user_id == user_id))
+        return {
+            "total": total, "completed": completed, "episodes_watched": episodes,
+            "reviews_written": reviews.scalar_one(),
+            "watching": await self.list_entries(db, user_id, "watching", 6, 0),
+        }
+
     async def list_entries(
         self, db: AsyncSession, user_id: UUID, status: WatchStatus | None, limit: int, offset: int,
+        anime_source: str | None = None, anime_external_id: str | None = None,
     ) -> list[WatchlistEntry]:
         query = select(WatchlistEntry).where(WatchlistEntry.user_id == user_id)
         if status is not None:
             query = query.where(WatchlistEntry.status == status)
+        if anime_source is not None:
+            query = query.where(WatchlistEntry.anime_source == anime_source)
+        if anime_external_id is not None:
+            query = query.where(WatchlistEntry.anime_external_id == anime_external_id)
         result = await db.execute(
             query.order_by(WatchlistEntry.created_at.desc(), WatchlistEntry.id)
             .limit(limit).offset(offset)

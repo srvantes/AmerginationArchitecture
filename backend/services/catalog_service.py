@@ -185,6 +185,9 @@ async def catalog_page(source, external_id, slug=None):
     if cached is not None:
         return CatalogPage.model_validate(cached)
     page = await (shiki_page(external_id) if source == "shikimori" else animego_page(external_id, slug))
+    if page.details.episodes_total:
+        await set_cached_json(f"catalog:progress-total:v1:{page.details.source}:{page.details.external_id}",
+                              86400, page.details.episodes_total)
     if not page.warnings and page.playback.status != "unavailable":
         await set_cached_json(key, 21600 if page.playback.status == "matched" else 1800, page.model_dump(mode="json"))
     return page

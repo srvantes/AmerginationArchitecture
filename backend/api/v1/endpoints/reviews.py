@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
 from backend.core.security import get_current_user
+from backend.core.rate_limit import limited_review_create, limited_discussion_edit, RATE_LIMIT_RESPONSES
 from backend.crud.review import review_db
 from backend.database.models.user import User
 from backend.database.models.anime import Review
@@ -28,10 +29,10 @@ async def list_reviews(anime_source: AnimeSource, anime_external_id: AnimeId,
     return {"total": total.scalar_one(), "items": [ReviewOut.model_validate(item) for item in rows.scalars().all()]}
 
 
-@router.post("/", response_model=ReviewOut, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ReviewOut, status_code=status.HTTP_201_CREATED, responses=RATE_LIMIT_RESPONSES)
 async def write_review(
     review_data: ReviewCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(limited_review_create),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -52,11 +53,11 @@ async def get_review(
     return review
 
 
-@router.patch("/{review_id}", response_model=ReviewOut)
+@router.patch("/{review_id}", response_model=ReviewOut, responses=RATE_LIMIT_RESPONSES)
 async def update_review(
     review_id: UUID,
     review_data: ReviewUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(limited_review_create),
     db: AsyncSession = Depends(get_db),
 ):
     review = await review_db.update_review(db, review_id, current_user.id, review_data)
@@ -65,10 +66,10 @@ async def update_review(
     return review
 
 
-@router.delete("/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{review_id}", status_code=status.HTTP_204_NO_CONTENT, responses=RATE_LIMIT_RESPONSES)
 async def delete_review(
     review_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(limited_review_create),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     deleted = await review_db.delete_review(db, review_id, current_user.id)

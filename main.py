@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.api.v1.endpoints import anime, authentication, profile, reviews, users
 from backend.api.v1.endpoints import comments
 from backend.core.redis import close_redis
+from backend.services.avatars import AVATAR_DIR
 
 
 @asynccontextmanager
@@ -28,13 +29,17 @@ app.include_router(comments.router, prefix="/api/v1/comments", tags=["comments"]
 
 STATIC_DIR = Path(__file__).parent / "backend" / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/media/avatars", StaticFiles(directory=AVATAR_DIR), name="avatars")
 
 
 @app.get("/", include_in_schema=False)
+@app.get("/my-list", include_in_schema=False)
+@app.get("/profile", include_in_schema=False)
 @app.get("/anime/{anime_id}", include_in_schema=False)
 @app.get("/anime/{source}/{anime_id}", include_in_schema=False)
 async def frontend(anime_id: str | None = None, source: str | None = None):
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/watch", include_in_schema=False)
