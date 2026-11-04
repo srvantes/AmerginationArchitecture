@@ -10,6 +10,7 @@ from backend.core.config import settings
 from backend.database.models.user import User
 from backend.database.models.email_verification import EmailVerification
 from backend.services.mailer import send_verification_email
+from backend.services.achievements import sync_achievements
 
 CODE_SECONDS = 120
 MAX_ATTEMPTS = 5
@@ -28,7 +29,8 @@ def digest(user_id, code):
 
 
 async def locked_state(db, user_id):
-    result = await db.execute(select(User).where(User.id == user_id).with_for_update()
+    # Serialize challenges without blocking FK checks made while awarding achievements.
+    result = await db.execute(select(User).where(User.id == user_id).with_for_update(key_share=True)
                               .execution_options(populate_existing=True))
     user = result.scalar_one()
     if user.email_verified:
@@ -75,6 +77,7 @@ async def confirm_code(db, user_id, code):
         raise HTTPException(400, f"Неверный код. Осталось попыток: {MAX_ATTEMPTS - state.attempts}.")
     user.email_verified_at = now
     await db.delete(state)
+    await sync_achievements(db, user.id)
     await db.commit()
     return {"email_verified": True}
 

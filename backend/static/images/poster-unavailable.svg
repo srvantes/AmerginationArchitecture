@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 420" role="img" aria-labelledby="title">
+  <title id="title">Постер недоступен</title>
+  <defs>
+    <linearGradient id="background" x2="1" y2="1">
+      <stop stop-color="#192c46"/>
+      <stop offset="1" stop-color="#0c1527"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#background)" d="M0 0h300v420H0z"/>
+  <rect x="27" y="27" width="246" height="366" rx="10" fill="none" stroke="#d8b97b" stroke-opacity=".22"/>
+  <g fill="none" stroke="#d8b97b" stroke-width="2" stroke-linejoin="round">
+    <rect x="117" y="139" width="66" height="86" rx="5"/>
+    <path d="m127 205 17-21 12 13 10-11 8 10M129 153h13"/>
+  </g>
+  <g text-anchor="middle" font-family="Segoe UI,Arial,sans-serif">
+    <text x="150" y="268" fill="#d8b97b" font-size="20">Amergination</text>
+    <text x="150" y="295" fill="#9aa9bf" font-size="12">Постер недоступен</text>
+  </g>
+</svg>

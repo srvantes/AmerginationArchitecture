@@ -2,6 +2,7 @@ from sqlalchemy import select, func, delete, literal
 from fastapi import HTTPException
 from backend.database.models.comment import Comment, CommentLike
 from backend.database.models.user import User, UserProfile
+from backend.services.achievements import sync_achievements
 
 REVIEW_LIKES_REQUIRED = 11
 
@@ -66,6 +67,8 @@ async def change_like(db, comment_id, user_id, wanted):
         await db.flush()
     if wanted and not profile.can_write_reviews and await likes_received(db, comment.user_id) >= REVIEW_LIKES_REQUIRED:
         profile.can_write_reviews = True
+    if wanted:
+        await sync_achievements(db, comment.user_id)
     await db.commit()
     rows = await comment_rows(db, comment_id=comment_id, viewer=user_id)
     if not rows:

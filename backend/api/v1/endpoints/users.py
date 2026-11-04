@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
-from backend.core.security import get_current_user
+from backend.core.security import get_current_user, get_optional_user
 from backend.crud.user import crud_user
 from backend.crud.watchlist import crud_watchlist
 from backend.database.models.user import User
@@ -84,18 +84,37 @@ async def delete_watchlist_entry(
     return Response(status_code=204)
 
 
+async def accessible_watchlist(user_id, user, db):
+    profile = await crud_user.get_user_profile(db, user_id)
+    if profile is None or not profile.is_active:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not profile.show_watchlist and (user is None or user_id != user.id):
+        raise HTTPException(status_code=403, detail="Этот список аниме скрыт владельцем.",
+                            headers={"Cache-Control": "private, no-store"})
+
+
+@router.get("/{user_id}/watchlist/summary", response_model=WatchlistSummary)
+async def get_user_watchlist_summary(
+    user_id: UUID,
+    response: Response,
+    user: User | None = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    await accessible_watchlist(user_id, user, db)
+    return await crud_watchlist.summary(db, user_id)
+
+
 @router.get("/{user_id}/watchlist", response_model=list[WatchlistOut])
 async def get_user_watchlist(
     user_id: UUID,
+    response: Response,
     status: WatchStatus | None = None,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    user: User = Depends(get_current_user),
+    user: User | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
-    profile = await crud_user.get_user_profile(db, user_id)
-    if profile is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user_id != user.id and not profile.show_watchlist:
-        raise HTTPException(status_code=403, detail="This watchlist is private")
+    response.headers["Cache-Control"] = "private, no-store"
+    await accessible_watchlist(user_id, user, db)
     return await present_entries(await crud_watchlist.list_entries(db, user_id, status, limit, offset))

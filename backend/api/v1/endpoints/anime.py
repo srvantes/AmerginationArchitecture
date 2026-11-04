@@ -1,6 +1,7 @@
 from typing import Literal
 
-from fastapi import APIRouter, Query, HTTPException, Path
+from fastapi import APIRouter, Depends, Query, HTTPException, Path
+from backend.core.rate_limit import limited_catalog_read, RATE_LIMIT_RESPONSES
 
 
 from backend.services.shikimori_client import search_anime_cached, get_anime_details_cached
@@ -12,21 +13,31 @@ from backend.services.animego_service import (
     get_episodes_info
 )
 from backend.services.animego_service import normalize_animego_id, get_embedded_player
+from backend.services.voice_catalog import get_voice_episode_catalog
 from backend.services.kodik_player import get_player_info_cached, get_stream_url_cached
 from backend.database.sсhemas.catalog import AnimeCard, AnimeDetails, EpisodeList, PlayerInfo, StreamInfo, StreamQuality
 from backend.services.catalog_adapters import anime_card, anime_details, episode_list, player_info, stream_info
-from backend.database.sсhemas.catalog import EmbeddedPlayer
+from backend.database.sсhemas.catalog import EmbeddedPlayer, VoiceEpisodeCatalog
 from backend.services.catalog_adapters import embedded_player
 
-from backend.database.sсhemas.catalog import HomeCatalog, CatalogPage
-from backend.services.catalog_service import home_catalog, catalog_page
+from backend.database.sсhemas.catalog import HomeCatalog, CatalogPage, CatalogCollection
+from backend.services.catalog_service import home_catalog, catalog_page, collection_catalog, apply_posters
+from backend.services.anime_registry import remember_titles
 
-router = APIRouter(tags=["anime"])
+router = APIRouter(tags=["anime"], dependencies=[Depends(limited_catalog_read)], responses=RATE_LIMIT_RESPONSES)
 
 
 @router.get("/catalog/home", response_model=HomeCatalog)
 async def live_home(limit: int = Query(12, ge=1, le=30)):
     return await home_catalog(limit)
+
+
+@router.get("/catalog/collections/{slug}", response_model=CatalogCollection,
+            responses={404: {"description": "Подборка не найдена"},
+                       502: {"description": "Источник подборки временно недоступен"},
+                       504: {"description": "Источник не ответил вовремя"}})
+async def live_collection(slug: str, limit: int = Query(50, ge=1, le=50)):
+    return await collection_catalog(slug, limit)
 
 
 @router.get("/catalog/{source}/{external_id}", response_model=CatalogPage)
@@ -37,12 +48,18 @@ async def live_page(source: Literal["shikimori", "animego"], external_id: str = 
 async def search_anime(q:str = Query(..., min_length=2, description="Название произведения")):
 
     result = await search_anime_cached(q)
-    return [anime_card(item, "shikimori") for item in result]
+    cards = [anime_card(item, "shikimori") for item in result]
+    await apply_posters(cards)
+    await remember_titles(cards)
+    return cards
 
 @router.get("/details", response_model=AnimeDetails)
 async def get_anime(shikimori_link: str = Query(..., description="Линк на аниме")):
     result = await get_anime_details_cached(shikimori_link)
-    return anime_details(result, shikimori_link)
+    details = anime_details(result, shikimori_link)
+    await apply_posters([details])
+    await remember_titles([details])
+    return details
 
 
 
@@ -53,7 +70,9 @@ async def get_anime(shikimori_link: str = Query(..., description="Линк на 
 @router.get("/animego/search", response_model=list[AnimeCard])
 async def animego_search(q: str = Query(..., min_length=2, description="Название аниме")):
     """Поиск аниме на AnimeGO"""
-    return [anime_card(item, "animego") for item in await search_animego(q)]
+    cards = [anime_card(item, "animego") for item in await search_animego(q)]
+    await remember_titles(cards)
+    return cards
 
 
 @router.get("/animego/episodes", response_model=EpisodeList, responses={
@@ -86,6 +105,16 @@ async def animego_voices(
     """Список доступных озвучек для конкретного эпизода"""
     anime_id = normalize_animego_id(anime_id)
     return player_info(await get_voices_cached(anime_id, episode), "animego", anime_id)
+
+
+@router.get("/animego/voice-episodes", response_model=VoiceEpisodeCatalog)
+async def animego_voice_episodes(
+    anime_id: str = Query(..., min_length=1),
+    translation_id: str = Query(..., min_length=1, max_length=100),
+    player: Literal["kodik", "sibnet", "aniboom", "cvh"] = Query(...),
+    episode: int = Query(1, ge=1),
+):
+    return await get_voice_episode_catalog(anime_id, translation_id, player, episode)
 
 
 @router.get("/animego/stream", response_model=StreamInfo)

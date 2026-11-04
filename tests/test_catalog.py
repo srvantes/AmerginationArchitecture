@@ -36,6 +36,15 @@ class CatalogContractTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
         self.addCleanup(self.client.close)
+        patcher = patch("backend.api.v1.endpoints.anime.apply_posters", AsyncMock())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = patch("backend.api.v1.endpoints.anime.remember_titles", AsyncMock())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = patch("backend.api.v1.endpoints.anime.remember_titles", AsyncMock())
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def call_with(self, function, payload, path, **params):
         with patch(f"backend.api.v1.endpoints.anime.{function}", AsyncMock(return_value=payload)):

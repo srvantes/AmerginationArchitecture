@@ -19,6 +19,15 @@ ANIMEGO = {"id": "103", "title": "Наруто: Ураганные хроник�
 
 
 class LiveCatalogTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        for name, mock in [("remember_titles", AsyncMock()), ("get_title", AsyncMock(return_value=None))]:
+            patcher = patch.object(service, name, mock)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        patcher = patch.object(service, "apply_posters", AsyncMock())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_matching_requires_exact_title_year_and_kind(self):
         reference = service.shiki_card(SHIKI)
         card = AnimeCard(source="animego", external_id="103", title=reference.title, year=2007, kind="Сериал")
@@ -78,10 +87,22 @@ class LiveCatalogTests(unittest.IsolatedAsyncioTestCase):
         page = service.CatalogPage(details=AnimeDetails(**service.shiki_card(SHIKI).model_dump()),
                                    playback=service.PlaybackMatch(status="matched", animego_id="103", shikimori_id="1735"))
         with patch.object(service, "get_cached_json", AsyncMock(return_value=page.model_dump(mode="json"))), \
+             patch.object(service, "set_cached_json", AsyncMock()) as identity_cache, \
              patch.object(service, "shiki_page", AsyncMock()) as upstream:
             result = await service.catalog_page("shikimori", "1735")
         self.assertEqual(result, page)
         upstream.assert_not_awaited()
+        identity_cache.assert_awaited_once_with("catalog:playback-shikimori:v1:103", 21600,
+                                               {"shikimori_id": "1735"})
+
+    async def test_unverified_or_mismatched_identity_is_not_remembered(self):
+        details = AnimeDetails(**service.shiki_card(SHIKI).model_dump())
+        with patch.object(service, "set_cached_json", AsyncMock()) as cache:
+            for playback in [service.PlaybackMatch(status="ambiguous", shikimori_id="1735"),
+                             service.PlaybackMatch(status="matched", animego_id="103", shikimori_id="20")]:
+                page = service.CatalogPage(details=details, playback=playback)
+                await service.remember_playback_identity(page)
+        cache.assert_not_awaited()
 
     async def test_animego_slug_cannot_be_an_external_url(self):
         with patch.object(service, "get_cached_json", AsyncMock(return_value=None)), \

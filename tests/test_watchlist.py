@@ -74,6 +74,7 @@ class DatabaseAPITestCase(unittest.TestCase):
                 import_module("migrations.versions.0004_email_verification").upgrade()
                 import_module("migrations.versions.0005_password_reset").upgrade()
                 import_module("migrations.versions.0006_watchlist_posters").upgrade()
+                import_module("migrations.versions.0007_achievements").upgrade()
         self.owner_id, self.other_id = uuid4(), uuid4()
         with Session(self.engine) as session:
             for user_id, name in [(self.owner_id, "owner"), (self.other_id, "other")]:
@@ -314,7 +315,7 @@ class WatchlistTests(DatabaseAPITestCase):
         self.assertEqual(self.client.post(self.path, json={}).status_code, 401)
         self.assertEqual(self.client.patch(f'{self.path}/{entry["id"]}', json={}).status_code, 401)
         self.assertEqual(self.client.delete(f'{self.path}/{entry["id"]}').status_code, 401)
-        self.assertEqual(self.client.get(f"/api/v1/users/{self.owner_id}/watchlist").status_code, 401)
+        self.assertEqual(self.client.get(f"/api/v1/users/{self.owner_id}/watchlist").status_code, 403)
 
     def test_migration_downgrade_and_upgrade(self):
         migration = import_module("migrations.versions.0002_watchlist")

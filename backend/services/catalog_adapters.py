@@ -5,6 +5,7 @@ from functools import wraps
 from urllib.parse import urljoin, urlparse
 
 from fastapi import HTTPException
+from backend.services.posters import poster_url
 
 from backend.database.sсhemas.catalog import (
     AnimeCard, AnimeDetails, Episode, EpisodeList, PlayerInfo,
@@ -79,7 +80,7 @@ def anime_card(data, source):
         source=source, external_id=external_id,
         title=required_text(data.get("title")),
         original_title=text(data.get("original_title")),
-        page_url=url(data.get("link"), base), poster_url=url(poster, base),
+        page_url=url(data.get("link"), base), poster_url=poster_url(poster, base),
         slug=slug, year=number(data.get("year")), kind=text(data.get("type")),
         status=text(data.get("status")), studio=text(data.get("studio")),
         genres=data.get("genres") or [], score=number(score, float),

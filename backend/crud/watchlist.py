@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database.models.watchlist import WatchlistEntry
 from backend.database.models.anime import Review
+from backend.services.achievements import sync_achievements
 from backend.database.sсhemas.watchlist import WatchlistCreate, WatchlistUpdate, WatchStatus
 
 
@@ -43,6 +44,7 @@ class CRUDWatchlist:
     async def create(self, db: AsyncSession, user_id: UUID, data: WatchlistCreate) -> WatchlistEntry:
         entry = WatchlistEntry(user_id=user_id, **data.model_dump())
         db.add(entry)
+        await sync_achievements(db, user_id)
         await db.commit()
         await db.refresh(entry)
         return entry
@@ -58,6 +60,7 @@ class CRUDWatchlist:
     ) -> WatchlistEntry:
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(entry, field, value)
+        await sync_achievements(db, entry.user_id)
         await db.commit()
         await db.refresh(entry)
         return entry

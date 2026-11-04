@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from .achievement import AchievementOut
 
 
 class BaseBadge(BaseModel):
@@ -72,6 +73,23 @@ class UserMe(BaseUser):
     id: UUID
     email_verified: bool
     profile: UserProfile
+
+
+class PublicProfile(BaseModel):
+    id: UUID
+    username: str
+    nickname: str | None = None
+    avatar_url: str | None = None
+    profile_background: str | None = None
+    country: str | None = None
+    bio: str | None = None
+    created_at: datetime
+    show_watchlist: bool
+
+
+class MiniProfile(BaseModel):
+    profile: PublicProfile
+    achievements: list[AchievementOut]
 
 
 class UserStats(BaseModel):

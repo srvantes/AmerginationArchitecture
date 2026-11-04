@@ -7,12 +7,13 @@ let dsDrafts = {comments: null, reviews: null};
 const dsWords = value => (value.match(/\S+/gu) || []).filter(word => /[\p{L}\p{N}]/u.test(word)).length;
 
 async function dsApi(path, options = {}) {
- const headers = {'Content-Type': 'application/json', ...options.headers, ...(dsToken ? {Authorization: 'Bearer ' + dsToken} : {})};
+ const requestToken = dsToken;
+ const headers = {'Content-Type': 'application/json', ...options.headers, ...(requestToken ? {Authorization: 'Bearer ' + requestToken} : {})};
  const response = await fetch('/api/v1/' + path, {...options, headers});
  if (response.status === 204) return null;
  const data = await response.json();
  if (!response.ok) {
-  if (response.status === 401) { dsToken = null; dsUser = null; dsAccess = null; dsDrafts = {comments: null, reviews: null}; sessionStorage.removeItem('amergination-token'); dsAuthView(); dsRenderForms(); }
+  if (response.status === 401 && requestToken && requestToken === dsToken) { dsToken = null; dsUser = null; dsAccess = null; dsDrafts = {comments: null, reviews: null}; sessionStorage.removeItem('amergination-token'); dsAuthView(); dsRenderForms(); }
   const error = Error(typeof data.detail === 'string' ? data.detail : data.detail?.[0]?.msg?.replace(/^Value error, /, '') || 'Не удалось выполнить действие. Попробуйте ещё раз.');
   error.status = response.status; error.retryAfter = Number(response.headers.get('Retry-After')) || 0; throw error;
  }
@@ -20,6 +21,8 @@ async function dsApi(path, options = {}) {
 }
 function dsAuthView() {
  window.watchlistAuthChanged?.();
+ window.playbackHistoryAuthChanged?.();
+ window.playerHistoryAuthChanged?.();
  $('open-auth').querySelector('.account-name').textContent = dsUser ? (dsUser.email_verified ? dsUser.username : 'Подтвердить почту') : 'Войти';
  const resetting = !!window.passwordResetActive;
  $('auth-form').hidden = !!dsUser || resetting; $('auth-switch').hidden = !!dsUser || resetting; $('auth-logout').hidden = !dsUser || resetting;
@@ -89,7 +92,7 @@ function dsRenderForms() {
   const updateCounter = () => { const words = dsWords(body.value); counter.textContent = kind === 'comments' ? `${words} / 250 слов` : `${words} слов · от 250 до 1500`; counter.classList.toggle('word-limit', words > (kind === 'comments' ? 250 : 1500)); };
   body.addEventListener('input', updateCounter); updateCounter();
   if (kind === 'reviews') { spoiler = document.createElement('select'); spoiler.required = true; selectOptions(spoiler, [['', 'Укажите наличие спойлеров'], ['false', 'Без спойлеров'], ['true', 'Есть спойлеры']]); spoiler.value = editing ? String(editing.has_spoilers) : ''; dsField(form, 'Спойлеры', spoiler); }
-  else { spoiler = document.createElement('input'); spoiler.type = 'checkbox'; spoiler.checked = editing?.has_spoilers || false; const label = text('label', '', 'spoiler-checkbox'); label.append(spoiler, text('span', 'Есть спойлеры — скрыть текст до раскрытия')); form.append(label); }
+  else { spoiler = document.createElement('input'); spoiler.type = 'checkbox'; spoiler.checked = editing?.has_spoilers || false; const label = text('label', '', 'spoiler-checkbox'); label.append(text('span', 'Есть спойлеры — скрыть текст до раскрытия'), spoiler); form.append(label); }
   if (draft) { if (kind === 'reviews') spoiler.value = draft.spoiler; else spoiler.checked = draft.spoiler; }
   const saveDraft = () => { dsDrafts[kind] = {editingId: editing?.id || 'new', title: title?.value, text: body.value, spoiler: kind === 'reviews' ? spoiler.value : spoiler.checked}; };
   body.addEventListener('input', saveDraft); title?.addEventListener('input', saveDraft); spoiler.addEventListener('change', saveDraft);
@@ -116,7 +119,14 @@ function dsRenderList(kind) {
  if (!dsData[kind].items.length) area.append(text('p', kind === 'comments' ? 'Комментариев пока нет.' : 'Рецензий пока нет.', 'subtle'));
  for (const item of dsData[kind].items) {
   const article = text('article', '', 'discussion-item');
-  article.append(text('p', item.author_name + ' · ' + new Date(item.created_at || item.date).toLocaleDateString('ru-RU'), 'discussion-author'));
+  const authorLine = text('p', '', 'discussion-author');
+  const author = text('a', '', 'discussion-profile-link'); author.href = '/profile/' + encodeURIComponent(item.user_id);
+  author.dataset.miniUser = item.user_id;
+  const authorAvatar = text('span', item.author_name.slice(0,1).toLocaleUpperCase('ru-RU'), 'discussion-avatar'); authorAvatar.setAttribute('aria-hidden','true');
+  author.append(authorAvatar,text('span',item.author_name,'discussion-author-name'));
+  author.setAttribute('aria-haspopup','dialog'); author.setAttribute('aria-controls','mini-profile-card'); author.setAttribute('aria-expanded','false');
+  authorLine.append(author, text('span', ' · ' + new Date(item.created_at || item.date).toLocaleDateString('ru-RU')));
+  article.append(authorLine);
   if (kind === 'reviews') article.append(text('h3', item.title));
   const body = text('p', item.text, 'discussion-text');
   if (item.has_spoilers) { const details = document.createElement('details'); details.className = 'spoiler-block'; details.append(text('summary', 'Есть спойлеры · раскрыть текст'), body); article.append(details); }

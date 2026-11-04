@@ -14,13 +14,16 @@ from backend.database.models.watchlist import WatchlistEntry
 from backend.database.models.comment import Comment, CommentLike
 from backend.database.models.email_verification import EmailVerification
 from backend.database.models.password_reset import PasswordReset
+from backend.database.models.achievement import UserAchievement
+from backend.database.models.playback_history import PlaybackHistory
+from backend.database.models.anime_registry import AnimeRegistry
 
 
 
 config = context.config
 
 
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

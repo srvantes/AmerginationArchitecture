@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .base import CRUDBase
 from ..database.models.anime import Review
 from ..database.models.user import UserProfile
+from ..services.achievements import sync_achievements
 from ..database.sсhemas.anime import ReviewCreate, ReviewUpdate
 
 
@@ -40,6 +41,7 @@ class CRUDReview(CRUDBase[Review, ReviewCreate, ReviewUpdate]):
             anime_rating=review_data.rating,
         )
         db.add(review)
+        await sync_achievements(db, user_id)
         await db.commit()
         await db.refresh(review)
         return review

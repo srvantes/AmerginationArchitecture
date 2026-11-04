@@ -11,11 +11,13 @@ window.profileEditorAuthChanged = () => {
 };
 $('profile-edit').addEventListener('click', () => {
  if (!dsUser) { $('auth-dialog').showModal(); return; }
+ if (profileUserId && profileUserId !== dsUser.id) return;
  if (peBusy) return;
  peClear(); peOwner = dsUser.id;
  $('profile-edit-name').value = dsUser.profile?.nickname || '';
  $('profile-edit-bio').value = dsUser.profile?.bio || '';
  $('profile-edit-country').value = dsUser.profile?.country || '';
+ $('profile-edit-visibility').checked = !!dsUser.profile?.show_watchlist;
  $('profile-edit-name').placeholder = dsUser.username;
  accountAvatar($('profile-editor-preview'), dsUser);
  $('profile-editor-dialog').showModal(); $('profile-edit-name').focus();
@@ -37,10 +39,10 @@ $('profile-editor-form').addEventListener('submit', async event => {
  event.preventDefault();
  if (peBusy || !dsUser || peOwner !== dsUser.id) return;
  const owner = peOwner;
- const payload = {nickname:$('profile-edit-name').value.trim() || null, bio:$('profile-edit-bio').value.trim() || null, country:$('profile-edit-country').value.trim() || null};
+ const payload = {nickname:$('profile-edit-name').value.trim() || null, bio:$('profile-edit-bio').value.trim() || null, country:$('profile-edit-country').value.trim() || null, show_watchlist:$('profile-edit-visibility').checked};
  const file = $('profile-edit-avatar').files[0];
  peBusy = true; $('profile-editor-save').disabled = true;
- for (const id of ['profile-edit-name','profile-edit-bio','profile-edit-country','profile-edit-avatar']) $(id).disabled = true;
+ for (const id of ['profile-edit-name','profile-edit-bio','profile-edit-country','profile-edit-avatar','profile-edit-visibility']) $(id).disabled = true;
  $('profile-editor-status').textContent = 'Сохраняем…';
  let avatarSaved = false;
  try {
@@ -57,7 +59,7 @@ $('profile-editor-form').addEventListener('submit', async event => {
   if (dsUser?.id === owner) $('profile-editor-status').textContent = (avatarSaved ? 'Аватар сохранён. Остальные изменения не сохранены: ' : '') + error.message;
  } finally {
   peBusy = false; $('profile-editor-save').disabled = false;
-  for (const id of ['profile-edit-name','profile-edit-bio','profile-edit-country','profile-edit-avatar']) $(id).disabled = false;
+  for (const id of ['profile-edit-name','profile-edit-bio','profile-edit-country','profile-edit-avatar','profile-edit-visibility']) $(id).disabled = false;
   if (!$('profile-editor-dialog').open) peClear();
  }
 });

@@ -84,8 +84,8 @@ class DiscussionTests(DatabaseAPITestCase):
         response = self.client.patch("/api/v1/profile/settings", headers=self.owner_headers,
                                      json={"can_write_reviews": True})
         self.assertEqual(response.status_code, 422, response.text)
-        profile = self.client.get(f"/api/v1/profile/{self.owner_id}", headers=self.owner_headers)
-        self.assertFalse(profile.json()["can_write_reviews"])
+        profile = self.client.get("/api/v1/auth/me", headers=self.owner_headers)
+        self.assertFalse(profile.json()["profile"]["can_write_reviews"])
         self.assertEqual(self.client.post(self.review_path, json=self.review(), headers=self.owner_headers).status_code, 403)
 
     def test_one_review_per_title_edit_and_ownership(self):

@@ -21,6 +21,7 @@ from ..crud import crud_user
 
 logger = logging.getLogger(__name__)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
 class UserRole(str, Enum):
@@ -142,6 +143,13 @@ async def get_verified_user(user: User = Depends(get_current_user)) -> User:
     if not user.email_verified:
         raise HTTPException(403, "Подтвердите почту, чтобы публиковать тексты и ставить лайки")
     return user
+
+
+async def get_optional_user(token: str | None = Depends(optional_oauth2_scheme),
+                            db: AsyncSession = Depends(get_db)) -> User | None:
+    if token is None:
+        return None
+    return await get_current_user(token, db)
 
 
 def require_permission(permission: str):

@@ -2,9 +2,10 @@
 from enum import IntEnum
 from typing import Literal
 
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import AnyHttpUrl, BaseModel, Field, PrivateAttr, computed_field
 
 from .anime import AnimeSource
+from backend.services.anime_urls import anime_path
 
 
 class StreamQuality(IntEnum):
@@ -25,6 +26,7 @@ class EmbeddedPlayer(BaseModel):
 
 
 class AnimeCard(BaseModel):
+    _registry_slug: str | None = PrivateAttr(default=None)
     source: AnimeSource
     external_id: str = Field(min_length=1)
     title: str = Field(min_length=1)
@@ -38,6 +40,12 @@ class AnimeCard(BaseModel):
     studio: str | None = None
     genres: list[str] = Field(default_factory=list)
     score: float | None = Field(None, ge=0, le=10)
+
+    @computed_field
+    @property
+    def public_path(self) -> str | None:
+        return anime_path(self.source, self.external_id, self.title, self.original_title, self.slug,
+                          public_slug=self._registry_slug)
 
 
 class AnimeDetails(AnimeCard):
@@ -73,9 +81,20 @@ class CatalogPage(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class CatalogCollectionInfo(BaseModel):
+    slug: str = Field(min_length=1, max_length=40)
+    title: str = Field(min_length=1, max_length=100)
+    order: Literal["ranked", "popularity"]
+
+
+class CatalogCollection(CatalogCollectionInfo):
+    items: list[AnimeCard] = Field(default_factory=list)
+
+
 class HomeCatalog(BaseModel):
     ongoing: list[AnimeCard] = Field(default_factory=list)
     popular: list[AnimeCard] = Field(default_factory=list)
+    collections: list[CatalogCollectionInfo] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -90,6 +109,15 @@ class EpisodeList(BaseModel):
     source: AnimeSource
     external_id: str
     episodes: list[Episode]
+
+
+class VoiceEpisodeCatalog(BaseModel):
+    episodes: list[int]
+    status: Literal["ready", "unsupported"] = "ready"
+    message: str | None = None
+    checked: int = Field(ge=0)
+    total: int = Field(ge=0)
+    next_offset: None = None
 
 
 class Translation(BaseModel):

@@ -1,8 +1,10 @@
 from typing import Literal, Optional
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
+from urllib.parse import urlsplit
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+from sqlalchemy.engine import URL
 
 
 class Settings(BaseSettings):
@@ -22,6 +24,8 @@ class Settings(BaseSettings):
     EXTERNAL_READ_TIMEOUT_SECONDS: float = Field(default=5.0, gt=0, le=60)
     EXTERNAL_SERVICE_ATTEMPTS: int = Field(default=2, ge=1, le=3)
     EXTERNAL_RETRY_MAX_DELAY_SECONDS: float = Field(default=2.0, ge=0, le=5)
+    ENABLE_CATALOG_RATE_LIMIT: bool = False
+    CATALOG_LIMIT_PER_MINUTE: int = Field(default=120, ge=1, le=10000)
 
     REGISTRATION_LIMIT_PER_HOUR: int = Field(default=3, ge=1, le=10000)
     LOGIN_LIMIT_PER_5_MINUTES: int = Field(default=30, ge=1, le=10000)
@@ -49,10 +53,30 @@ class Settings(BaseSettings):
     REDIS_SOCKET_TIMEOUT_SECONDS: float = 1.0
 
     KODIK_TOKEN: str | None = None
+    KODIK_SITE_URL: str = "http://127.0.0.1:8080"
+
+    @field_validator("KODIK_SITE_URL")
+    @classmethod
+    def validate_kodik_site_origin(cls, value):
+        """The provider must receive our configured site, never a caller's Host."""
+        try:
+            origin = urlsplit(value)
+            if (len(value) > 2048 or any(ord(char) < 33 for char in value)
+                    or origin.scheme not in {"http", "https"} or not origin.hostname
+                    or origin.username is not None or origin.password is not None
+                    or origin.path not in {"", "/"} or origin.query or origin.fragment):
+                raise ValueError
+            origin.port  # Validate a configured port, including malformed/out-of-range values.
+        except (ValueError, TypeError):
+            raise ValueError("KODIK_SITE_URL должен быть адресом сайта без пути, параметров и пароля") from None
+        return f"{origin.scheme}://{origin.netloc}"
 
     @property
     def DATABASE_URL(self) -> str:
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        return URL.create(
+            "postgresql+asyncpg", username=self.POSTGRES_USER, password=self.POSTGRES_PASSWORD,
+            host=self.POSTGRES_HOST, port=self.POSTGRES_PORT, database=self.POSTGRES_DB,
+        ).render_as_string(hide_password=False)
 
 
     class Config:

@@ -1,7 +1,8 @@
 'use strict';
 const wlStatuses = [['planned', 'Запланировано'], ['watching', 'Смотрю'], ['completed', 'Просмотрено'], ['on_hold', 'На паузе'], ['dropped', 'Брошено']];
 let wlFilter = '', wlRows = [], wlVersion = 0, wlDetailVersion = 0, wlEntry = null, wlBusy = false, wlDetailReady = false;
-const wlPath = 'users/me/watchlist';
+const wlReadOnly = !!publicListUserId;
+const wlPath = wlReadOnly ? 'users/' + publicListUserId + '/watchlist' : 'users/me/watchlist';
 function wlProgress(value, total = null) {
  if (!/^\d+$/.test(String(value))) throw Error('Введите целое число просмотренных серий от 0.');
  const count = Number(value);
@@ -39,19 +40,17 @@ function wlRender() {
   let cachedCard;
   try { cachedCard = JSON.parse(sessionStorage.getItem('anime:' + entry.anime_source + ':' + entry.anime_external_id)); } catch {}
   const slug = entry.anime_slug || cachedCard?.slug;
-  if (['animego', 'shikimori'].includes(entry.anime_source)) title.href = '/anime/' + entry.anime_source + '/' + encodeURIComponent(entry.anime_external_id) + (slug ? '?slug=' + encodeURIComponent(slug) : '');
+  const path=animePath({...entry,anime_slug:slug,public_path:cachedCard?.public_path,original_title:cachedCard?.original});
+  if(path)title.href=path;
   const poster = text('a', '', 'watchlist-poster');
   poster.setAttribute('aria-label', 'Открыть аниме: ' + entry.anime_title);
   if (title.href) poster.href = title.href;
   poster.append(text('span', 'Нет постера', 'watchlist-poster-fallback'));
-  const posterUrl = safeUrl(entry.poster_url || cachedCard?.image);
-  if (posterUrl) {
-   const image = document.createElement('img'); image.src = posterUrl; image.alt = ''; image.loading = 'lazy'; image.referrerPolicy = 'no-referrer';
-   image.addEventListener('error', () => image.remove()); poster.append(image);
-  }
+ poster.append(posterImage(entry.poster_url || cachedCard?.image, entry.anime_title));
   const description = text('div', '', 'watchlist-description');
   description.append(title, text('p', 'Просмотрено серий: ' + entry.episodes_watched + (entry.episodes_total ? ' / ' + entry.episodes_total : ''), 'subtle'));
   copy.append(poster, description);
+  if (wlReadOnly) { row.append(copy); return row; }
   const controls = text('div', '', 'watchlist-controls'), select = document.createElement('select');
   selectOptions(select, wlStatuses); select.value = entry.status;
   select.setAttribute('aria-label', 'Статус: ' + entry.anime_title);
@@ -96,9 +95,9 @@ function wlRender() {
 async function wlLoad(append = false) {
  if (!listPage) return;
  const version = ++wlVersion;
- $('watchlist-login').hidden = !!dsUser; $('watchlist-more').hidden = true;
+ $('watchlist-login').hidden = wlReadOnly || !!dsUser; $('watchlist-more').hidden = true;
  if (!append) { wlRows = []; wlRender(); }
- if (!dsUser) { $('watchlist-status').textContent = dsToken ? 'Проверяем вход…' : 'Войдите, чтобы открыть свой список аниме.'; return; }
+ if (!dsUser && !wlReadOnly) { $('watchlist-status').textContent = dsToken ? 'Проверяем вход…' : 'Войдите, чтобы открыть свой список аниме.'; return; }
  $('watchlist-status').textContent = 'Загружаем список…';
  try {
   const params = new URLSearchParams({limit:20, offset:append ? wlRows.length : 0}); if (wlFilter) params.set('status', wlFilter);
@@ -107,7 +106,7 @@ async function wlLoad(append = false) {
   wlRows = append ? [...wlRows, ...rows] : rows; wlRender();
   $('watchlist-more').hidden = rows.length < 20;
   $('watchlist-status').textContent = wlRows.length ? '' : wlFilter ? 'В этом статусе пока нет аниме.' : 'Список пока пуст. Добавьте аниме со страницы тайтла.';
- } catch (error) { if (version === wlVersion) $('watchlist-status').textContent = error.message; }
+ } catch (error) { if (version === wlVersion) { if (error.status === 403) { wlRows = []; wlRender(); } $('watchlist-status').textContent = error.message; } }
 }
 function wlDialogView() {
  const total = wlEntry?.episodes_total || window.watchlistAnime?.episodes_total;
@@ -126,6 +125,7 @@ $('add-list').addEventListener('click', async () => {
  $('watchlist-dialog-status').textContent = ''; wlDialogView(); $('watchlist-dialog').showModal();
 });
 async function wlSave(remove = false) {
+ if (wlReadOnly) return;
  if (wlBusy || !dsUser || !window.watchlistAnime) return;
  const version = wlDetailVersion, anime = window.watchlistAnime;
  let progress;
@@ -157,6 +157,10 @@ window.watchlistAuthChanged = () => {
 window.addEventListener('watchlist-anime', wlLoadDetail);
 if (listPage) {
  document.querySelectorAll('.site-header nav a').forEach(link => link.classList.toggle('nav-active', link.pathname === '/my-list'));
+}
+if (wlReadOnly) {
+ $('watchlist-heading').textContent = 'Список аниме';
+ $('watchlist-owner').hidden = false; $('watchlist-owner').href = '/profile/' + publicListUserId;
 }
 selectOptions($('watchlist-select'), wlStatuses);
 wlFilters(); wlLoadDetail(); wlLoad();

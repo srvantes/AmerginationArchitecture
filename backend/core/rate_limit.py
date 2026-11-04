@@ -91,6 +91,12 @@ async def limited_registration(request: Request, limiter=Depends(get_rate_limite
     await limiter.check([policy("registration", client_ip(request), settings.REGISTRATION_LIMIT_PER_HOUR, 3600)])
 
 
+async def limited_catalog_read(request: Request, limiter=Depends(get_rate_limiter)):
+    """Bound public provider work on the VPS; local development keeps its defaults."""
+    if settings.ENABLE_CATALOG_RATE_LIMIT:
+        await limiter.check([policy("catalog-read", client_ip(request), settings.CATALOG_LIMIT_PER_MINUTE, 60)])
+
+
 async def limited_login(request: Request, form_data: UserLogin, limiter=Depends(get_rate_limiter)):
     ip = client_ip(request)
     await limiter.check([
