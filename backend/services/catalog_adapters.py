@@ -131,6 +131,7 @@ def player_info(data, source, external_id):
             player=text(item.get("player")).lower() if item.get("player") else ("kodik" if source == "kodik" else None),
             kind=text(item.get("type")), embed_url=url(item.get("embed")),
             episodes_start=start, episodes_end=end,
+            source="kodik" if source == "kodik" else "animego",
         ))
     return PlayerInfo(
         source=source, external_id=external_id,

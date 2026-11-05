@@ -1,24 +1,27 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync('backend/static/app.js','utf8');
 function setup(){
- const elements=new Map(),requests=[],saved=[];
+ const elements=new Map(),requests=[],saved=[],windowEvents={};
  function element(id){
   if(!elements.has(id))elements.set(id,{value:'',textContent:'',hidden:false,disabled:false,options:[],events:{},
    addEventListener(name,handler){this.events[name]=handler;},removeAttribute(name){delete this[name];}});
   return elements.get(id);
  }
  element('episode-select').value='1';
+ element('embedded-video').contentWindow={};
  let response=async(path)=>path==='voices'?{translations:[]}:{embed_url:'https://player.example/video'};
- const context=vm.createContext({$:element,URL,AbortController,window:{watchlistAnime:{source:'shikimori',id:'21',title:'Ван-Пис'},playbackHistorySave(anime,choice){saved.push({...choice});}},dsUser:null,dsToken:null,
+ const context=vm.createContext({$:element,URL,URLSearchParams,AbortController,window:{addEventListener(name,handler){windowEvents[name]=handler;},watchlistAnime:{source:'shikimori',id:'21',title:'Ван-Пис'},playbackHistorySave(anime,choice){saved.push({...choice});}},dsUser:null,dsToken:null,
   setTimeout(handler){queueMicrotask(handler);return 0;},clearTimeout(){},
   selectOptions(select,values){select.options=Array.from(values, pair=>Object.assign(Array.from(pair),{value:String(pair[0])}));select.value=String(values[0]?.[0]??'');},
   safeUrl(value){try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)?url.href:null;}catch{return null;}},
   api(path,params){requests.push({path,params});return response(path,params);},
+  async fetch(value){const url=new URL(value,'http://localhost'),path='kodik/'+url.pathname.split('/').at(-1),params=Object.fromEntries(url.searchParams);requests.push({path,params});const data=await response(path,params);return {ok:true,json:async()=>data};},
+  catalogApi(path){requests.push({path:'catalog',params:{path}});return response('catalog',{path});},
  });
  vm.runInContext('let translations=[],playerVersion=1,playbackId="one-piece",playerEpisodes=[1,2,4,7].map(number=>({number})),voiceReferenceEpisode=null,voiceEpisodesVersion=0,voiceEpisodesController;const voiceEpisodesCache=new Map();let playerMetadataReady=false,playbackInteractionVersion=0,playbackRestoreVersion=0,playbackRestoreUser=null,playbackAuthKey=null,playbackRestoreBusy=false;'+
   source.slice(source.indexOf('function stopPlayer()'),source.indexOf('async function catalogApi('))+
   source.slice(source.indexOf("$('episode-select').addEventListener('change'"),source.indexOf('function activateTab(')),context);
- return {element,requests,saved,context,setResponse(fn){response=fn;},run(code){return vm.runInContext(code,context);}};
+ return {element,requests,saved,context,windowEvents,setResponse(fn){response=fn;},run(code){return vm.runInContext(code,context);}};
 }
 const voice=(player,id,name)=>({player,id,name,embed_url:'https://player.example/'+player});
 const voices=[voice('kodik','same','Студия Kodik'),voice('aniboom','same','Студия Aniboom'),voice('kodik','other','Другая студия')];
@@ -164,7 +167,163 @@ async function main(){
  await lateLogin.run('initPlayer()');assert.equal(lateLogin.requests.filter(r=>r.path==='player').length,0);
  lateLogin.run('dsUser={id:"owner"};dsToken="owner-token";window.playerHistoryAuthChanged();');
  await tick();await tick();assert.equal(lateLogin.element('episode-select').value,'4');
+
+ // Aniboom switches its media without navigating the host iframe. Mirror its
+ // completed-switch event and save the same episode without opening it again.
+ const aniboomEmbed='https://aniboom.one/embed/test-anime?episode=1&translation=26&episodes=1';
+ const aniboomResponse=async(path,params)=>path==='player'?{embed_url:aniboomEmbed}:normal(path,params);
+ async function aniboomFixture(auth=true){
+  const fixture=setup();fixture.setResponse(aniboomResponse);
+  if(auth)fixture.run('dsUser={id:"owner"};dsToken="owner-token";');
+  await fixture.run('loadVoices(playerVersion)');
+  fixture.element('player-select').value='aniboom';fixture.element('player-select').events.change();
+  fixture.element('voice-select').value='1';await fixture.element('voice-select').events.change();
+  return fixture;
+ }
+ function episodeEvent(fixture,episode,previousEpisode,overrides={}){
+  return {source:fixture.element('embedded-video').contentWindow,origin:'https://aniboom.one',
+   data:{source:'aniboom-player',type:'player.episodechange',payload:{animeId:'test-anime',episode,previousEpisode,translation:26}},...overrides};
+ }
+ const internal=await aniboomFixture();const firstSrc=internal.element('embedded-video').src;
+ const requestCount=internal.requests.length;
+ const switchedEvent=episodeEvent(internal,2,1);
+ internal.windowEvents.message(switchedEvent);
+ assert.equal(internal.element('episode-select').value,'2');
+ assert.equal(internal.element('previous-episode').disabled,false);
+ assert.equal(internal.element('next-episode').disabled,false);
+ assert.equal(internal.element('embedded-video').src,firstSrc);
+ assert.equal(internal.requests.length,requestCount);
+ assert.deepEqual(internal.saved.map(s=>s.episode),[1,2]);
+ internal.windowEvents.message(switchedEvent); // Duplicate postMessage must not write again.
+ assert.deepEqual(internal.saved.map(s=>s.episode),[1,2]);
+ for(const badEvent of [
+  episodeEvent(internal,7,2,{source:{}}),
+  episodeEvent(internal,7,2,{origin:'https://aniboom.one.attacker.example'}),
+  episodeEvent(internal,7,2,{origin:'null'}),
+  episodeEvent(internal,7,2,{data:'not-json'}),
+  ...[{animeId:'other-anime'},{translation:66},{episode:'7'},{episode:4},{episode:0},{episode:1.5},
+      {episode:100001},{previousEpisode:1}].map(payload=>{
+   const event=episodeEvent(internal,7,2);Object.assign(event.data.payload,payload);return event;
+  }),
+  episodeEvent(internal,7,2,{data:{source:'other-player',type:'player.episodechange',payload:{}}}),
+  episodeEvent(internal,7,2,{data:{source:'aniboom-player',type:'player.timeupdate',payload:{currentTime:7}}}),
+ ]){
+  internal.windowEvents.message(badEvent);
+  assert.equal(internal.element('episode-select').value,'2');
+  assert.deepEqual(internal.saved.map(s=>s.episode),[1,2]);
+ }
+ internal.windowEvents.message(episodeEvent(internal,7,2));
+ assert.equal(internal.element('episode-select').value,'7');
+ assert.equal(internal.element('next-episode').disabled,true);
+ assert.deepEqual(internal.saved.map(s=>s.episode),[1,2,7]);
+ internal.windowEvents.message(episodeEvent(internal,1,7));
+ assert.equal(internal.element('previous-episode').disabled,true);
+ assert.equal(internal.requests.length,requestCount);
+ // The host's own navigation starts from the current episode, including gaps.
+ await internal.element('next-episode').events.click();
+ assert.equal(internal.requests.at(-1).params.episode,'2');
+ assert.equal(internal.element('episode-select').value,'2');
+ internal.element('player-select').value='kodik';internal.element('player-select').events.change();
+ const savedBeforeStop=internal.saved.length;
+ internal.windowEvents.message(episodeEvent(internal,7,2));
+ assert.equal(internal.saved.length,savedBeforeStop);
+ assert.equal(internal.element('embedded-video').hidden,true);
+
+ const guestInternal=await aniboomFixture(false);
+ guestInternal.windowEvents.message(episodeEvent(guestInternal,2,1));
+ assert.equal(guestInternal.element('episode-select').value,'2');assert.equal(guestInternal.saved.length,0);
+ const newAccount=await aniboomFixture();
+ newAccount.run('dsUser={id:"other"};dsToken="other-token";');
+ newAccount.windowEvents.message(episodeEvent(newAccount,2,1));
+ assert.deepEqual(newAccount.saved.map(s=>s.episode),[1]);
+
+ // A late catalogue must not restore episode 1 or reload a player that already
+ // moved to episode 2 while the list was being fetched.
+ const earlySwitch=setup();let finishEarlyCatalog;
+ earlySwitch.setResponse((path,params)=>path==='voice-episodes'?new Promise(resolve=>finishEarlyCatalog=resolve):aniboomResponse(path,params));
+ await earlySwitch.run('loadVoices(playerVersion)');
+ earlySwitch.element('player-select').value='aniboom';earlySwitch.element('player-select').events.change();
+ earlySwitch.element('voice-select').value='1';const openingEarly=earlySwitch.element('voice-select').events.change();
+ await tick();earlySwitch.windowEvents.message(episodeEvent(earlySwitch,2,1));
+ assert.equal(earlySwitch.element('episode-select').value,'2');
+ finishEarlyCatalog({status:'ready',episodes:[1,2,7]});await openingEarly;
+ assert.equal(earlySwitch.element('episode-select').value,'2');
+ assert.equal(earlySwitch.element('previous-episode').disabled,false);
+ assert.equal(earlySwitch.requests.filter(r=>r.path==='player').length,1);
+
+ // A missing or stalled AnimeGo match cannot block the direct provider.
+ const directVoice={id:'610',name:'AniLibria.TV',player:'kodik',source:'kodik',embed_url:aniboomEmbed.replace('aniboom.one','kodikplayer.com')};
+ const independentResponse=async(path,params)=>path==='kodik/catalog'?{translations:[directVoice],episodes:[1,2]}:
+  path==='kodik/voice-episodes'?{status:'ready',episodes:[1,2,7]}:
+  path==='kodik/player'?{embed_url:'https://kodikplayer.com/seria/10/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/720p'}:
+  path==='episodes'?{episodes:[1,2,4,7].map(number=>({number}))}:normal(path,params);
+ function independentFixture(responder=independentResponse,match={status:'not_found'}){
+  const fixture=setup();fixture.setResponse(responder);
+  fixture.context.startMatch=match;
+  fixture.run('playbackShikimoriId="38668";initialPlaybackMatch=startMatch;');
+  return fixture;
+ }
+ const direct=independentFixture();await direct.run('initPlayer()');
+ assert.deepEqual(direct.element('player-select').options.map(o=>o[0]),['kodik']);
+ direct.element('voice-select').value='0';await direct.element('voice-select').events.change();
+ assert.deepEqual(direct.element('episode-select').options.map(o=>o[0]),[1,2,7]);
+ direct.element('episode-select').value='7';await direct.element('episode-select').events.change();
+ assert.equal(direct.requests.at(-1).path,'kodik/player');assert.equal(direct.requests.at(-1).params.episode,'7');
+ assert.equal(direct.requests.at(-1).params.shikimori_id,'38668');
+ assert.equal(direct.requests.some(r=>r.path==='episodes'||r.path==='voices'),false);
+
+ let finishMatch;
+ const stalled=independentFixture((path,params)=>path==='catalog'?new Promise(resolve=>finishMatch=resolve):independentResponse(path,params),{status:'pending'});
+ const loadingProviders=stalled.run('initPlayer()');await tick();await tick();
+ stalled.element('voice-select').value='0';await stalled.element('voice-select').events.change();
+ stalled.element('episode-select').value='7';await stalled.element('episode-select').events.change();
+ const mountedSrc=stalled.element('embedded-video').src;
+ finishMatch({playback:{status:'matched',animego_id:'1089'}});await loadingProviders;
+ assert.equal(stalled.element('episode-select').value,'7');assert.equal(stalled.element('voice-select').value,'0');
+ assert.equal(stalled.element('embedded-video').src,mountedSrc);
+ assert.deepEqual(stalled.element('player-select').options.map(o=>o[0]),['kodik','aniboom']);
+ assert.equal(stalled.element('voice-select').options.length,2); // One direct studio, no duplicate AnimeGo Kodik entries.
+ stalled.element('player-select').value='aniboom';stalled.element('player-select').events.change();
+ const aniboomIndex=stalled.run('translations.findIndex(v=>v.player==="aniboom")');
+ stalled.element('voice-select').value=String(aniboomIndex);await stalled.element('voice-select').events.change();
+ assert.equal(stalled.requests.at(-1).path,'player');assert.equal(stalled.requests.at(-1).params.anime_id,'1089');
+
+ for(const failed of ['kodik','animego']){
+  const isolated=independentFixture((path,params)=>{
+   if(failed==='kodik'&&path==='kodik/catalog'||failed==='animego'&&path==='episodes')throw Error('Provider unavailable');
+   return independentResponse(path,params);
+  },{status:'matched',animego_id:'1089'});
+  await isolated.run('initPlayer()');
+  assert.equal(isolated.element('player-select').disabled,false);
+  assert.ok(isolated.element('voice-select').options.length>1);
+ }
+ const directResume=independentFixture();directResume.run('dsUser={id:"owner"};dsToken="owner-token";');
+ directResume.context.window.playbackHistoryGet=async()=>({episode:7,player:'kodik',translation_id:'610',translation_source:'kodik'});
+ await directResume.run('initPlayer()');await tick();await tick();
+ assert.equal(directResume.element('episode-select').value,'7');
+ assert.deepEqual(directResume.saved.map(s=>[s.episode,s.translation_source]),[[7,'kodik']]);
+ const legacyResume=independentFixture(independentResponse,{status:'matched',animego_id:'1089'});
+ legacyResume.run('dsUser={id:"owner"};dsToken="owner-token";');
+ legacyResume.context.window.playbackHistoryGet=async()=>({episode:4,player:'kodik',translation_id:'same'});
+ await legacyResume.run('initPlayer()');await tick();await tick();
+ assert.equal(legacyResume.element('episode-select').value,'4');
+ assert.deepEqual(legacyResume.saved.map(s=>[s.episode,s.translation_source]),[[4,'animego']]);
+ let finishDirect;
+ const lateDirect=independentFixture((path,params)=>path==='kodik/catalog'?new Promise(resolve=>finishDirect=resolve):independentResponse(path,params),{status:'matched',animego_id:'1089'});
+ const pendingDirect=lateDirect.run('initPlayer()');await tick();await tick();
+ lateDirect.element('player-select').value='aniboom';lateDirect.element('player-select').events.change();
+ lateDirect.element('voice-select').value=String(lateDirect.run('translations.findIndex(v=>v.player==="aniboom")'));
+ await lateDirect.element('voice-select').events.change();
+ lateDirect.element('episode-select').value='7';await lateDirect.element('episode-select').events.change();
+ const beforeDirectSrc=lateDirect.element('embedded-video').src;
+ finishDirect({translations:[directVoice],episodes:[1,2]});await pendingDirect;
+ assert.equal(lateDirect.element('player-select').value,'aniboom');
+ assert.equal(lateDirect.element('episode-select').value,'7');
+ assert.equal(lateDirect.run('selectedVoice().player'),'aniboom');
+ assert.equal(lateDirect.element('embedded-video').src,beforeDirectSrc);
  console.log('Player UI: one catalogue request, exact gaps/counts, cache, preserved episode, stale responses, empty/unsupported catalogues and retry OK');
  console.log('Playback resume/navigation: account restoration, stable studio IDs, exact gaps, unavailable choices, manual/logout races and successful latest saves OK');
+ console.log('Aniboom events: internal switches, history, no iframe reload, origin/source/title/voice checks, deduplication and pending catalogue races OK');
+ console.log('Independent players: direct Kodik, missing/stalled AnimeGo, isolated failures, late-source selection preservation and legacy/direct history OK');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

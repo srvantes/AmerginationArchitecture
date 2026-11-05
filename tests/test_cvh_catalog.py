@@ -45,6 +45,24 @@ class CvhCatalogTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await cvh.get_episode_numbers(EMBED, "AniDUB"), [])
             self.assertEqual(await cvh.get_episode_numbers(EMBED, "AniDUB Online"), [1, 12])
 
+    async def test_studio_segment_embeds_use_the_actual_season_and_selected_voice(self):
+        cases = [
+            ("Dream%20Cast", "Dream Cast"),
+            ("AnilibriaTV", "AniLibria"),
+            ("%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D0%B9%D0%BD%D0%B0%D1%8F%20%D0%91%D0%B0%D0%BD%D0%B4%D0%B0", "Студийная Банда"),
+        ]
+        for segment, studio in cases:
+            with self.subTest(studio=studio):
+                payload = {"items": [record(1, studio=studio, season=1),
+                                     record(3, studio=studio, season=1),
+                                     record(7, studio=studio, season=2),
+                                     record(4, studio=studio + " Extra", season=1)]}
+                with patch.object(cvh, "_fetch_playlist", AsyncMock(return_value=payload)) as fetch:
+                    result = await cvh.get_episode_numbers(
+                        f"https://animego.me/cdn-iframe/52991/{segment}/1/1", studio)
+                self.assertEqual(result, [1, 3])
+                fetch.assert_awaited_once_with("52991", "https://animego.me/")
+
     async def test_anonymous_records_do_not_hide_a_named_studios_episodes(self):
         payload = {"items": [record(1), record(1, studio=None), record(3),
                              record(7, studio=""), record(8, studio="   "),
@@ -71,6 +89,11 @@ class CvhCatalogTests(unittest.IsolatedAsyncioTestCase):
             "https://animego.me/cdn-iframe/63293/0/1", "https://animego.me/cdn-iframe/x/2/1",
             "https://animego.me/cdn-iframe/63293/2/1/other", "https://animego.me/cdn-iframe/63293/2/1#x",
             "https://animego.me/player/63293", "https://animego.me/cdn-iframe/63293/%32/1",
+            "https://animego.me/cdn-iframe/52991/Dream%2FCast/1/1",
+            "https://animego.me/cdn-iframe/52991/Dream%5CCast/1/1",
+            "https://animego.me/cdn-iframe/52991/%00/1/1",
+            "https://animego.me/cdn-iframe/52991/../1/1",
+            "https://animego.me/cdn-iframe/52991/Dream%20Cast/0/1",
         ]
         with patch.object(cvh, "_fetch_playlist", AsyncMock()) as fetch:
             for url in invalid:

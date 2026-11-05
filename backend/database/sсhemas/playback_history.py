@@ -19,6 +19,7 @@ class PlaybackHistoryWrite(BaseModel):
     episode: int = Field(ge=1, le=100000, strict=True)
     player: PlaybackPlayer
     translation_id: str = Field(pattern=r"^[1-9][0-9]{0,19}$", max_length=20)
+    translation_source: Literal["animego", "kodik"] = "animego"
     translation_name: str = Field(min_length=1, max_length=200)
 
     @field_validator("anime_title", "translation_name")

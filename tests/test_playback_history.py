@@ -21,6 +21,7 @@ class PlaybackHistoryTests(DatabaseAPITestCase):
         with self.engine.begin() as connection:
             with Operations.context(MigrationContext.configure(connection)):
                 self.migration.upgrade()
+                import_module("migrations.versions.0010_playback_translation_source").upgrade()
 
     def payload(self, **fields):
         return {
@@ -74,6 +75,15 @@ class PlaybackHistoryTests(DatabaseAPITestCase):
         self.assertEqual(self.client.get(path, headers=self.other_headers).json()["episode"], 2)
         self.assertEqual(len(self.client.get(self.path, headers=self.owner_headers).json()), 2)
         self.assertEqual(len(self.client.get(self.path, headers=self.other_headers).json()), 1)
+
+    def test_legacy_and_direct_translation_ids_remain_distinct(self):
+        legacy = self.save(translation_id="610")
+        self.assertEqual(legacy["translation_source"], "animego")
+        direct = self.save(translation_id="610", translation_source="kodik")
+        self.assertEqual(direct["id"], legacy["id"])
+        self.assertEqual(direct["translation_source"], "kodik")
+        restored = self.client.get(self.path + "/shikimori/21", headers=self.owner_headers).json()
+        self.assertEqual(restored["translation_source"], "kodik")
 
     def test_history_stays_private_when_watchlist_is_public(self):
         self.save()
@@ -206,4 +216,17 @@ class PlaybackHistoryTests(DatabaseAPITestCase):
                 self.assertIn("watchlist_entries", tables)
                 self.assertIn("users", tables)
                 self.migration.upgrade()
+                import_module("migrations.versions.0010_playback_translation_source").upgrade()
         self.save()
+
+    def test_translation_source_migration_preserves_existing_history(self):
+        original = self.save()
+        migration = import_module("migrations.versions.0010_playback_translation_source")
+        with self.engine.begin() as connection:
+            with Operations.context(MigrationContext.configure(connection)):
+                migration.downgrade()
+                migration.upgrade()
+        restored = self.client.get(self.path + "/shikimori/21", headers=self.owner_headers).json()
+        self.assertEqual(restored["id"], original["id"])
+        self.assertEqual(restored["episode"], original["episode"])
+        self.assertEqual(restored["translation_source"], "animego")

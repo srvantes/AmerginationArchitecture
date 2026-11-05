@@ -83,6 +83,19 @@ class LiveCatalogTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(page.playback.method, "same_source")
         matcher.assert_not_awaited()
 
+    async def test_deferred_card_never_waits_for_animego_or_caches_pending_match(self):
+        async def upstream(path, *args, **kwargs):
+            return SHIKI if path == "animes/1735" else []
+        with patch.object(service, "get_cached_json", AsyncMock(return_value=None)), \
+             patch.object(service, "cached_shiki", side_effect=upstream), \
+             patch.object(service, "animego_match", AsyncMock()) as matcher, \
+             patch.object(service, "set_cached_json", AsyncMock()) as cache:
+            page = await service.catalog_page("shikimori", "1735", defer_playback=True)
+        self.assertEqual(page.playback.status, "pending")
+        self.assertEqual(page.details.title, "Наруто: Ураганные хроники")
+        matcher.assert_not_awaited()
+        self.assertFalse(any(call.args[0].startswith("catalog:page:") for call in cache.await_args_list))
+
     async def test_catalog_cache_avoids_refetching_and_preserves_mapping(self):
         page = service.CatalogPage(details=AnimeDetails(**service.shiki_card(SHIKI).model_dump()),
                                    playback=service.PlaybackMatch(status="matched", animego_id="103", shikimori_id="1735"))

@@ -2,7 +2,7 @@
 import asyncio
 import re
 import unicodedata
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 import httpx
 from fastapi import HTTPException
@@ -13,6 +13,7 @@ from backend.services.upstream import run_async
 
 _EMBED_HOSTS = {"animego.org", "animego.me"}
 _EMBED_PATH = re.compile(r"/cdn-iframe/([1-9][0-9]{0,19})/([1-9][0-9]{0,6})/([1-9][0-9]{0,6})/?")
+_STUDIO_EMBED_PATH = re.compile(r"/cdn-iframe/([1-9][0-9]{0,19})/([^/]{1,300})/([1-9][0-9]{0,6})/([1-9][0-9]{0,6})/?")
 _PLAYLIST_URL = "https://plapi.cdnvideohub.com/api/v1/player/sv/playlist"
 _PUBLISHER_ID = "747"
 _AGGREGATOR = "mali"
@@ -27,13 +28,23 @@ def _embed_context(embed_url: str) -> tuple[str, int, str]:
     try:
         url = urlsplit(embed_url)
         match = _EMBED_PATH.fullmatch(url.path)
+        studio_match = _STUDIO_EMBED_PATH.fullmatch(url.path)
         if (url.scheme != "https" or url.hostname not in _EMBED_HOSTS
                 or url.username is not None or url.password is not None
-                or url.port not in (None, 443) or url.fragment or not match):
+                or url.port not in (None, 443) or url.fragment or not (match or studio_match)):
             raise ValueError
+        if studio_match:
+            # New AnimeGo embeds include a studio segment before season/episode.
+            # It may be an alias (AnilibriaTV vs AniLibria); the selected voice's
+            # display name still identifies the exact studio in CVH's playlist.
+            studio = unquote(studio_match[2], errors="strict")
+            if (not studio.strip() or studio in {".", ".."}
+                    or any(ord(char) < 32 or char in "/\\" for char in studio)):
+                raise ValueError
     except (ValueError, TypeError, AttributeError):
         raise HTTPException(status_code=422, detail="Некорректная ссылка CVH от AnimeGo") from None
-    return match[1], int(match[2]), f"https://{url.hostname}/"
+    return ((match[1], int(match[2]), f"https://{url.hostname}/") if match else
+            (studio_match[1], int(studio_match[3]), f"https://{url.hostname}/"))
 
 
 async def _fetch_playlist(title_id: str, referer: str) -> dict:

@@ -75,7 +75,8 @@ window.playbackHistorySave = (anime, choice) => {
  playbackHistoryFailed = null;
  $('playback-history-status').textContent = ''; $('retry-playback-history').hidden = true;
  const payload = {anime_title:anime.title,poster_url:anime.poster_url || null,anime_slug:anime.slug || null,
-  episode:Number(choice.episode),player:choice.player,translation_id:String(choice.translation_id),translation_name:choice.translation_name};
+  episode:Number(choice.episode),player:choice.player,translation_id:String(choice.translation_id),translation_name:choice.translation_name,
+  translation_source:choice.translation_source||'animego'};
  const write = async () => {
   if (!playbackHistoryCurrent(identity, epoch)) return null;
   try {

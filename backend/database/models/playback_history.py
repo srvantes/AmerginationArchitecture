@@ -27,5 +27,6 @@ class PlaybackHistory(Base):
     episode = Column(Integer, nullable=False)
     player = Column(String(20), nullable=False)
     translation_id = Column(String(20), nullable=False)
+    translation_source = Column(String(20), nullable=False, default="animego", server_default="animego")
     translation_name = Column(String(200), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

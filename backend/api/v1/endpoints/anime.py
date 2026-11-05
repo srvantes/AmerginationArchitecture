@@ -23,6 +23,7 @@ from backend.services.catalog_adapters import embedded_player
 from backend.database.sсhemas.catalog import HomeCatalog, CatalogPage, CatalogCollection
 from backend.services.catalog_service import home_catalog, catalog_page, collection_catalog, apply_posters
 from backend.services.anime_registry import remember_titles
+from backend.services import direct_kodik
 
 router = APIRouter(tags=["anime"], dependencies=[Depends(limited_catalog_read)], responses=RATE_LIMIT_RESPONSES)
 
@@ -41,8 +42,8 @@ async def live_collection(slug: str, limit: int = Query(50, ge=1, le=50)):
 
 
 @router.get("/catalog/{source}/{external_id}", response_model=CatalogPage)
-async def live_page(source: Literal["shikimori", "animego"], external_id: str = Path(pattern=r"^[1-9][0-9]*$"), slug: str | None = Query(None, max_length=300)):
-    return await catalog_page(source, external_id, slug)
+async def live_page(source: Literal["shikimori", "animego"], external_id: str = Path(pattern=r"^[1-9][0-9]*$"), slug: str | None = Query(None, max_length=300), defer_playback: bool = False):
+    return await catalog_page(source, external_id, slug, defer_playback=defer_playback)
 
 @router.get("/search", response_model=list[AnimeCard])
 async def search_anime(q:str = Query(..., min_length=2, description="Название произведения")):
@@ -149,6 +150,35 @@ async def kodik_info(
 ):
     """Получение доступных серий и переводов по ID Shikimori."""
     return player_info(await get_player_info_cached(shikimori_id), "kodik", shikimori_id)
+
+
+@router.get("/kodik/catalog", response_model=PlayerInfo)
+async def direct_kodik_catalog(shikimori_id: str = Query(pattern=r"^[1-9][0-9]{0,19}$")):
+    title = await direct_kodik.get_title(shikimori_id)
+    return PlayerInfo(source="kodik", external_id=shikimori_id, id_source="shikimori",
+                      translations=[{**voice.model_dump(), "player": "kodik", "source": "kodik"}
+                                    for voice in title.translations], episodes=title.episodes)
+
+
+@router.get("/kodik/voice-episodes", response_model=VoiceEpisodeCatalog)
+async def direct_kodik_episodes(shikimori_id: str = Query(pattern=r"^[1-9][0-9]{0,19}$"),
+                               translation_id: str = Query(pattern=r"^[1-9][0-9]{0,19}$")):
+    voice = await direct_kodik.get_voice(shikimori_id, translation_id)
+    numbers = sorted(voice.episodes)
+    return VoiceEpisodeCatalog(episodes=numbers, checked=len(numbers), total=len(numbers))
+
+
+@router.get("/kodik/player", response_model=EmbeddedPlayer)
+async def direct_kodik_player(shikimori_id: str = Query(pattern=r"^[1-9][0-9]{0,19}$"),
+                             translation_id: str = Query(pattern=r"^[1-9][0-9]{0,19}$"),
+                             episode: int = Query(ge=1, le=100000)):
+    voice = await direct_kodik.get_voice(shikimori_id, translation_id)
+    embed = voice.episodes.get(episode)
+    if embed is None:
+        raise HTTPException(404, "Серия недоступна в выбранной озвучке Kodik")
+    return EmbeddedPlayer(source="kodik", external_id=shikimori_id, episode=episode,
+                          translation_id=voice.translation.id, translation_name=voice.translation.name,
+                          player="kodik", embed_url=embed)
 
 
 @router.get("/kodik/stream", response_model=StreamInfo)

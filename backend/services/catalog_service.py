@@ -295,7 +295,7 @@ async def animego_match(details):
     return PlaybackMatch(status="matched", animego_id=match.external_id, shikimori_id=details.external_id, method="title_year_kind")
 
 
-async def shiki_page(external_id, known_animego_id=None):
+async def shiki_page(external_id, known_animego_id=None, *, defer_playback=False):
     data = await cached_shiki("animes/" + external_id)
     card = shiki_card(data)
     details = AnimeDetails(**card.model_dump(), description=data.get("description") or None,
@@ -306,6 +306,8 @@ async def shiki_page(external_id, known_animego_id=None):
         if known_animego_id:
             return PlaybackMatch(status="matched", animego_id=known_animego_id,
                                  shikimori_id=external_id, method="same_source")
+        if defer_playback:
+            return PlaybackMatch(status="pending", shikimori_id=external_id)
         return await animego_match(details)
 
     related_raw, match = await asyncio.gather(cached_shiki("animes/" + external_id + "/related"), resolve_playback(), return_exceptions=True)
@@ -391,7 +393,7 @@ async def remember_playback_identity(page):
                               {"shikimori_id": playback.shikimori_id})
 
 
-async def catalog_page(source, external_id, slug=None):
+async def catalog_page(source, external_id, slug=None, *, defer_playback=False):
     key = f"catalog:page:v1:{source}:{external_id}"
     cached = await get_cached_json(key)
     if cached is not None:
@@ -400,13 +402,13 @@ async def catalog_page(source, external_id, slug=None):
         await remember_titles([page.details, *page.related])
         await remember_playback_identity(page)
         return page
-    page = await (shiki_page(external_id) if source == "shikimori" else animego_page(external_id, slug))
+    page = await (shiki_page(external_id, defer_playback=defer_playback) if source == "shikimori" else animego_page(external_id, slug))
     await apply_posters([page.details, *page.related])
     await remember_titles([page.details, *page.related])
     if page.details.episodes_total:
         await set_cached_json(f"catalog:progress-total:v1:{page.details.source}:{page.details.external_id}",
                               86400, page.details.episodes_total)
-    if not page.warnings and page.playback.status != "unavailable":
+    if not page.warnings and page.playback.status not in {"unavailable", "pending"}:
         await set_cached_json(key, 21600 if page.playback.status == "matched" else 1800, page.model_dump(mode="json"))
     await remember_playback_identity(page)
     return page

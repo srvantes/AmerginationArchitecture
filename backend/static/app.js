@@ -77,20 +77,36 @@ function renderCards(target, cards, ongoing = false) { $(target).replaceChildren
 function toast(message) { clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false; toastTimer = setTimeout(() => $('toast').hidden = true, 4000); }
 async function api(path, params, options = {}) { const response = await fetch('/api/v1/anime/animego/' + path + '?' + new URLSearchParams(params), options); const data = await response.json(); if (!response.ok) throw Error(typeof data.detail === 'string' ? data.detail : 'Не удалось загрузить данные. Попробуй ещё раз.'); return data; }
 function selectOptions(select, values) { select.replaceChildren(...values.map(([value, label]) => { const option = text('option', label); option.value = value; return option; })); }
-function stopPlayer() { $('embedded-video').hidden = true; $('embedded-video').removeAttribute('src'); $('player-placeholder').hidden = false; }
+function stopPlayer() { embeddedPlayback = null; $('embedded-video').hidden = true; $('embedded-video').removeAttribute('src'); $('player-placeholder').hidden = false; }
 const playerNames = {kodik:'Kodik',sibnet:'Sibnet',aniboom:'Aniboom',cvh:'CVH'};
+let embeddedPlayback = null;
+let playbackShikimoriId=null,initialPlaybackMatch=null,independentPlayback=false,playerMetadataGeneration=0;
+let directVoices=[],animegoVoices=[],directEpisodes=[],animegoEpisodes=[],animegoReferenceEpisode=1,legacyKodikId=null;
+let playbackSourceLoads={};
+async function kodikApi(path,params,options={}) {
+ const response=await fetch('/api/v1/anime/kodik/'+path+'?'+new URLSearchParams(params),options);
+ const data=await response.json();
+ if(!response.ok)throw Error(typeof data.detail==='string'?data.detail:'Kodik временно недоступен');
+ return data;
+}
+function voiceSource(voice){return voice?.source||'animego';}
+function voiceApi(voice,path,params,options={}) {
+ return voiceSource(voice)==='kodik'
+  ? kodikApi(path,{shikimori_id:playbackShikimoriId,translation_id:voice.id,...(path==='player'?{episode:params.episode}:{})},options)
+  : api(path,params,options);
+}
 function selectedVoice() {
  const value=$('voice-select').value;
  if(value==='')return null;
  const voice=translations[Number(value)];
  return voice?.player===$('player-select').value ? voice : null;
 }
-function renderVoices(preferredId=null) {
+function renderVoices(preferredId=null,preferredSource='animego') {
  const player=$('player-select').value;
  const voices=translations.map((voice,index)=>({voice,index})).filter(item=>item.voice.player===player);
  selectOptions($('voice-select'), [['',voices.length ? 'Выберите озвучку' : 'Нет озвучок'],...voices.map(({voice,index})=>[index,voice.name])]);
  $('voice-select').disabled=!voices.length;
- const preferred=voices.find(({voice})=>voice.id===preferredId);
+ const preferred=voices.find(({voice})=>voice.id===preferredId&&voiceSource(voice)===preferredSource);
  if(preferred)$('voice-select').value=String(preferred.index);
  updateEpisodeNavigation();
 }
@@ -106,6 +122,34 @@ function updateEpisodeNavigation() {
  $('previous-episode').disabled=!ready||index===0;
  $('next-episode').disabled=!ready||index===numbers.length-1;
 }
+function savePlaybackEpisode(voice,episode,auth) {
+ if(auth&&playbackAuth()?.id===auth.id&&playbackAuth()?.token===auth.token)
+  window.playbackHistorySave?.(window.watchlistAnime,{episode,player:voice.player,translation_id:voice.id,translation_name:voice.name,translation_source:voiceSource(voice)});
+}
+function syncEmbeddedEpisode(event) {
+ const current=embeddedPlayback,frame=$('embedded-video'),voice=selectedVoice();
+ if(!current||current.version!==playerVersion||frame.hidden||event.source!==frame.contentWindow
+    ||event.origin!==current.url.origin||current.url.origin!=='https://aniboom.one'
+    ||voice?.player!=='aniboom'||voice.id!==current.voice.id)return;
+ const data=event.data,payload=data?.payload;
+ if(!data||data.source!=='aniboom-player'||data.type!=='player.episodechange'||!payload||typeof payload!=='object'
+    ||payload.animeId!==current.url.pathname.match(/^\/embed\/([A-Za-z0-9_-]+)\/?$/)?.[1]
+    ||!Number.isSafeInteger(payload.translation)||String(payload.translation)!==current.url.searchParams.get('translation')
+    ||!Number.isSafeInteger(payload.episode)||payload.episode<1||payload.episode>100000
+    ||payload.episode===current.episode||payload.previousEpisode!==current.episode)return;
+ // The message confirms a completed switch, not a preview or a next-episode hint.
+ // Before the voice catalogue arrives, only the title's known episodes are allowed.
+ const numbers=$('episode-select').disabled ? playerEpisodes.map(episode=>episode.number) : episodeNavigationNumbers();
+ if(!numbers.includes(payload.episode))return;
+ current.episode=payload.episode;
+ if(!episodeNavigationNumbers().includes(payload.episode))
+  selectOptions($('episode-select'),[[payload.episode,'Серия '+payload.episode]]);
+ $('episode-select').value=String(payload.episode);
+ playerInteracted();
+ $('player-status').textContent='Серия '+payload.episode+' выбрана в плеере.';
+ savePlaybackEpisode(voice,payload.episode,current.auth);
+}
+window.addEventListener('message',syncEmbeddedEpisode);
 function playerInteracted() {
  ++playbackInteractionVersion;++playbackRestoreVersion;playbackRestoreBusy=false;
  $('playback-restore-status').textContent='';updateEpisodeNavigation();
@@ -131,11 +175,15 @@ async function restorePlayback() {
   const saved=await window.playbackHistoryGet(window.watchlistAnime.source,window.watchlistAnime.id);
   if(!current())return;
   if(!saved){$('playback-restore-status').textContent='';return;}
-  if(!playerEpisodes.some(episode=>episode.number===saved.episode)){
+  const source=saved.translation_source||'animego';
+  if(independentPlayback){await playbackSourceLoads[source];if(!current())return;}
+  const knownEpisodes=independentPlayback?animegoEpisodes:playerEpisodes;
+  if(source!=='kodik'&&!knownEpisodes.some(episode=>episode.number===saved.episode)){
    $('playback-restore-status').textContent='Сохранённая серия '+saved.episode+' больше недоступна. Выберите доступную серию и озвучку.';return;
   }
-  const version=++playerVersion;cancelVoiceEpisodes();stopPlayer();$('episode-select').value=String(saved.episode);
-  await loadVoices(version,{player:saved.player,id:saved.translation_id,deferOpen:true});
+  const version=++playerVersion;cancelVoiceEpisodes();stopPlayer();
+  selectOptions($('episode-select'),[[saved.episode,'Серия '+saved.episode]]);
+  await loadVoices(version,{player:saved.player,id:saved.translation_id,source,deferOpen:true});
   if(!current()||version!==playerVersion)return;
   if(!selectedVoice()){
    $('playback-restore-status').textContent='Сохранённая озвучка или плеер недоступны для серии '+saved.episode+'. Выберите доступные.';return;
@@ -169,20 +217,25 @@ async function openPlayer(version=++playerVersion) {
  if(!voice){$('player-status').textContent='Выберите озвучку.';return;}
  $('player-status').textContent='Открываем плеер…';
  try {
-  const data=await api('player',{anime_id:playbackId,episode:String(episode),translation_id:voice.id,player:voice.player});
+  const data=await voiceApi(voice,'player',{anime_id:playbackId,episode:String(episode),translation_id:voice.id,player:voice.player});
   if(version!==playerVersion)return;
   const embed=safeUrl(data.embed_url);if(!embed)throw Error('Плеер вернул некорректную ссылку');
+  embeddedPlayback={version,url:new URL(embed),voice,episode,auth};
   $('embedded-video').src=embed;$('embedded-video').hidden=false;$('player-placeholder').hidden=true;
   $('player-status').textContent='Плеер готов. Нажми воспроизведение внутри видео.';
-  if(auth&&playbackAuth()?.id===auth.id&&playbackAuth()?.token===auth.token)
-   window.playbackHistorySave?.(window.watchlistAnime,{episode,player:voice.player,translation_id:voice.id,translation_name:voice.name});
+  savePlaybackEpisode(voice,episode,auth);
   return true;
  }catch(error){if(version===playerVersion)$('player-status').textContent=error.message;}
  finally{updateEpisodeNavigation();}
 }
-function voiceEpisodesKey(voice){return playbackId+':'+voice.player+':'+voice.id+':'+voiceReferenceEpisode;}
+function voiceEpisodesKey(voice){return voiceSource(voice)+':'+(voiceSource(voice)==='kodik'?playbackShikimoriId:playbackId)+':'+voice.player+':'+voice.id+':'+voiceReferenceEpisode;}
 function cancelVoiceEpisodes(){++voiceEpisodesVersion;voiceEpisodesController?.abort();$('retry-voice-episodes').hidden=true;}
 function resetEpisodeChoices(){
+ if(independentPlayback){
+  const direct=$('player-select').value==='kodik'&&directVoices.length&&!legacyKodikId;
+  playerEpisodes=direct?directEpisodes:animegoEpisodes;
+  voiceReferenceEpisode=direct?1:animegoReferenceEpisode;
+ }
  const previous=$('episode-select').value;
  selectOptions($('episode-select'),playerEpisodes.map(episode=>[episode.number,'Серия '+episode.number]));
  if(playerEpisodes.some(episode=>String(episode.number)===previous))$('episode-select').value=previous;
@@ -191,7 +244,9 @@ function resetEpisodeChoices(){
 }
 function renderVoiceEpisodes(data,previous=$('episode-select').value){
  const playable=new Set(playerEpisodes.map(episode=>episode.number));
- const available=data.episodes.filter(number=>playable.has(number));
+ const direct=voiceSource(selectedVoice())==='kodik';
+ const available=data.episodes.filter(number=>direct||playable.has(number));
+ if(direct)playerEpisodes=available.map(number=>({number}));
  selectOptions($('episode-select'),available.length ? available.map(number=>[number,'Серия '+number]) : [['','Нет доступных серий']]);
  $('episode-select').disabled=!available.length;
  if(available.some(number=>String(number)===previous))$('episode-select').value=previous;
@@ -206,7 +261,7 @@ async function loadVoiceEpisodes(voice,run,preferredEpisode=$('episode-select').
  $('episode-select').disabled=true;
  updateEpisodeNavigation();
  try{
-  const data=cached && cached.expires>Date.now() ? cached.data : await api('voice-episodes',{
+  const data=cached && cached.expires>Date.now() ? cached.data : await voiceApi(voice,'voice-episodes',{
    anime_id:playbackId,translation_id:voice.id,player:voice.player,episode:voiceReferenceEpisode
   },{signal});
   if(run!==voiceEpisodesVersion)return;
@@ -215,7 +270,10 @@ async function loadVoiceEpisodes(voice,run,preferredEpisode=$('episode-select').
    return;
   }
   voiceEpisodesCache.set(key,{data,expires:Date.now()+300000});
-  const available=renderVoiceEpisodes(data,preferredEpisode);
+  const current=embeddedPlayback;
+  const preferred=current?.version===playerVersion&&current.voice.player===voice.player&&current.voice.id===voice.id
+   ? String(current.episode) : preferredEpisode;
+  const available=renderVoiceEpisodes(data,preferred);
   if(!available.length){++playerVersion;stopPlayer();$('player-status').textContent='У выбранной озвучки нет доступных серий.';}
   return available;
  }catch(error){
@@ -233,7 +291,7 @@ async function chooseVoice({strictEpisode=false}={}){
  // Open an explicitly chosen, known episode while the full catalogue loads.
  // Restoring history still waits for availability so an unavailable saved
  // episode never starts a different one. Other episodes stay disabled.
- const initialPlayer=!strictEpisode&&Number(preferred)===voiceReferenceEpisode ? openPlayer() : null;
+ const initialPlayer=voiceSource(voice)!=='kodik'&&!strictEpisode&&Number(preferred)===voiceReferenceEpisode ? openPlayer() : null;
  const available=await loadVoiceEpisodes(voice,run,preferred);
  if(run!==voiceEpisodesVersion)return;
  if(strictEpisode&&Array.isArray(available)&&available.length&&!available.includes(Number(preferred))){
@@ -241,16 +299,33 @@ async function chooseVoice({strictEpisode=false}={}){
   $('playback-restore-status').textContent='Сохранённая серия '+preferred+' недоступна в этой озвучке. Выберите другую серию или озвучку.';
   $('player-status').textContent='Выберите доступную серию.';updateEpisodeNavigation();return false;
  }
- if(initialPlayer&&Number($('episode-select').value)===voiceReferenceEpisode)return await initialPlayer;
+ if(initialPlayer&&(Number($('episode-select').value)===voiceReferenceEpisode
+    ||embeddedPlayback?.version===playerVersion&&embeddedPlayback.episode===Number($('episode-select').value)))return await initialPlayer;
  if($('episode-select').value)return await openPlayer();
 }
 async function loadVoices(version, preference={}) {
+ if(independentPlayback&&(preference.source==='kodik'||!preference.source&&$('player-select').value==='kodik'&&directVoices.length&&!legacyKodikId)){
+  const previous=$('episode-select').value;
+  mergePlayerSources(preference);
+  if(previous)$('episode-select').value=previous;
+  if(selectedVoice()&&!preference.deferOpen)await openPlayer(version);
+  return;
+ }
+ if(independentPlayback)playerEpisodes=animegoEpisodes;
  translations=[];$('voice-select').disabled=true;$('player-select').disabled=true;
  selectOptions($('voice-select'),[['','Загружаем…']]);selectOptions($('player-select'),[['','Загружаем…']]);
  const data=await api('voices',{anime_id:playbackId,episode:$('episode-select').value});
  if(version!==playerVersion)return;
  voiceReferenceEpisode=Number($('episode-select').value);
- translations=data.translations.filter(voice=>Object.hasOwn(playerNames,voice.player)&&safeUrl(voice.embed_url));
+ const voices=data.translations.filter(voice=>Object.hasOwn(playerNames,voice.player)&&safeUrl(voice.embed_url));
+ if(independentPlayback){
+  animegoVoices=voices;animegoReferenceEpisode=voiceReferenceEpisode;
+  if(preference.player==='kodik'&&(preference.source||'animego')==='animego')legacyKodikId=preference.id||null;
+  mergePlayerSources(preference);
+  if(selectedVoice()&&!preference.deferOpen)await openPlayer(version);
+  return;
+ }
+ translations=voices;
  const players=[...new Set(translations.map(voice=>voice.player))];
  selectOptions($('player-select'),players.length ? players.map(player=>[player,playerNames[player]]) : [['','Нет плееров']]);
  $('player-select').disabled=!players.length;
@@ -259,7 +334,63 @@ async function loadVoices(version, preference={}) {
  if(selectedVoice()&&!preference.deferOpen)await openPlayer(version);
  else $('player-status').textContent=!players.length ? 'Для этой серии пока нет доступных плееров.' : preference.id ? 'Для этой серии выберите доступную озвучку.' : 'Выберите озвучку — серия загрузится автоматически.';
 }
+function mergePlayerSources(preference={}) {
+ const current=selectedVoice(),player=preference.player||$('player-select').value;
+ const id=preference.id??current?.id,source=preference.source||voiceSource(current);
+ translations=[...directVoices,...animegoVoices.filter(voice=>!directVoices.length||voice.player!=='kodik'||voice.id===legacyKodikId)];
+ const players=[...new Set(translations.map(voice=>voice.player))];
+ selectOptions($('player-select'),players.length?players.map(value=>[value,playerNames[value]]):[['','Загружаем…']]);
+ $('player-select').disabled=!players.length;
+ if(players.includes(player))$('player-select').value=player;
+ renderVoices(id,source);
+ if(!selectedVoice())resetEpisodeChoices();
+ if(players.length){
+  playerMetadataReady=true;
+  if(!selectedVoice()&&!embeddedPlayback)$('player-status').textContent='Выберите озвучку — серия загрузится автоматически.';
+ }
+}
+async function initIndependentPlayers() {
+ const generation=++playerMetadataGeneration;
+ independentPlayback=true;directVoices=[];animegoVoices=[];directEpisodes=[];animegoEpisodes=[];legacyKodikId=null;
+ playerMetadataReady=false;stopPlayer();
+ const pending=new Set(['kodik','animego']),errors=[];
+ const finish=source=>{
+  if(generation!==playerMetadataGeneration)return;
+  pending.delete(source);mergePlayerSources();
+  if(playerMetadataReady)restorePlayback();
+  else if(!pending.size){
+   selectOptions($('episode-select'),[['','Недоступно']]);$('episode-select').disabled=true;
+   selectOptions($('player-select'),[['','Недоступно']]);selectOptions($('voice-select'),[['','Недоступно']]);
+   $('player-status').textContent=errors.join(' ')||'Для этого тайтла пока не найдены доступные плееры.';
+  }
+ };
+ playbackSourceLoads={};
+ playbackSourceLoads.kodik=(async()=>{
+  try{
+   const data=await kodikApi('catalog',{shikimori_id:playbackShikimoriId});
+   if(generation!==playerMetadataGeneration)return;
+   directVoices=data.translations.map(voice=>({...voice,source:'kodik'}));directEpisodes=data.episodes.map(number=>({number}));
+  }catch(error){if(generation===playerMetadataGeneration)errors.push(error.message);}
+  finally{finish('kodik');}
+ })();
+ playbackSourceLoads.animego=(async()=>{
+  try{
+   let match=initialPlaybackMatch;
+   if(match?.status==='pending')match=(await catalogApi('shikimori/'+playbackShikimoriId)).playback;
+   if(generation!==playerMetadataGeneration||match?.status!=='matched'||!match.animego_id)return;
+   playbackId=match.animego_id;
+   const [episodes,voices]=await Promise.all([api('episodes',{anime_id:playbackId}),api('voices',{anime_id:playbackId,episode:1})]);
+   if(generation!==playerMetadataGeneration)return;
+   animegoEpisodes=episodes.episodes;animegoReferenceEpisode=1;
+   animegoVoices=voices.translations.filter(voice=>Object.hasOwn(playerNames,voice.player)&&safeUrl(voice.embed_url));
+  }catch(error){if(generation===playerMetadataGeneration)errors.push(error.message);}
+  finally{finish('animego');}
+ })();
+ await Promise.all(Object.values(playbackSourceLoads));
+}
 async function initPlayer() {
+ if(playbackShikimoriId)return initIndependentPlayers();
+ independentPlayback=false;
  const version = ++playerVersion;
  try {
   const data = await api('episodes', { anime_id: playbackId });
@@ -408,7 +539,9 @@ function renderDetail(page) {
  renderCards('related-track', page.related.map(normalize));
  if (!page.related.length) $('related-track').append(text('p', 'Связанные аниме не найдены.', 'subtle'));
  playbackId = page.playback.animego_id;
- if (page.playback.status === 'matched' && playbackId) initPlayer();
+ playbackShikimoriId=page.details.source==='shikimori'?String(page.details.external_id):page.playback.shikimori_id;
+ initialPlaybackMatch=page.playback;
+ if (playbackShikimoriId||page.playback.status === 'matched' && playbackId) initPlayer();
  else {
   selectOptions($('episode-select'), [['', 'Недоступно']]);
   $('player-status').textContent = page.playback.status === 'ambiguous' ? 'Найдено несколько вариантов в AnimeGo. Автоматический выбор плеера недоступен.' : page.playback.status === 'unavailable' ? 'Источник плеера временно недоступен. Обновите страницу позже.' : 'Для этого тайтла пока не найден плеер AnimeGo.';
@@ -427,7 +560,7 @@ async function init() {
   try {
    let slug = pageRoute.slug || new URLSearchParams(location.search).get('slug');
    if (!slug && pageSource === 'animego') { try { slug = JSON.parse(sessionStorage.getItem('anime:animego:' + pageId))?.slug; } catch {} }
-   renderDetail(await catalogApi(pageSource + '/' + pageId, slug ? {slug} : {}));
+   renderDetail(await catalogApi(pageSource + '/' + pageId, {...(slug?{slug}:{}),...(pageSource==='shikimori'?{defer_playback:true}:{})}));
   } catch (error) { $('detail-title').textContent = 'Не удалось загрузить аниме'; $('detail-description').textContent = error.message; $('player-status').textContent = 'Данные недоступны. Обновите страницу или выберите тайтл через поиск.'; }
   return;
  }
@@ -461,6 +594,7 @@ $('episode-select').addEventListener('change',async()=>{
 });
 $('player-select').addEventListener('change',()=>{
  playerInteracted();
+ if(independentPlayback)legacyKodikId=null;
  ++playerVersion;cancelVoiceEpisodes();stopPlayer();renderVoices();
  resetEpisodeChoices();$('voice-episodes-status').textContent='';
  $('player-status').textContent='Выберите озвучку — серия загрузится автоматически.';

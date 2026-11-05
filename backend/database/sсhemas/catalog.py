@@ -68,7 +68,7 @@ class RelatedAnime(AnimeCard):
 
 
 class PlaybackMatch(BaseModel):
-    status: Literal["matched", "not_found", "ambiguous", "unavailable"]
+    status: Literal["matched", "not_found", "ambiguous", "unavailable", "pending"]
     animego_id: str | None = None
     shikimori_id: str | None = None
     method: Literal["title_year_kind", "same_source"] | None = None
@@ -128,6 +128,7 @@ class Translation(BaseModel):
     embed_url: AnyHttpUrl | None = None
     episodes_start: int | None = Field(None, ge=0)
     episodes_end: int | None = Field(None, ge=0)
+    source: Literal["animego", "kodik"] = "animego"
 
 
 class PlayerInfo(BaseModel):
@@ -136,6 +137,7 @@ class PlayerInfo(BaseModel):
     id_source: AnimeSource
     episodes_total: int | None = Field(None, ge=0)
     translations: list[Translation]
+    episodes: list[int] = Field(default_factory=list)
 
 
 class StreamVariant(BaseModel):
