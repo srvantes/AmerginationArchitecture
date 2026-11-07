@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 import uuid
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, String, Text, Boolean, UniqueConstraint, Index, func
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Index, SmallInteger, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -45,3 +45,12 @@ class Review(Base):
     @property
     def author_name(self):
         return self.user.username
+
+
+class ReviewVote(Base):
+    __tablename__ = "review_votes"
+    __table_args__ = (CheckConstraint("value IN (-1, 1)", name="ck_review_reaction_value"),)
+
+    review_id = Column(UUID(as_uuid=True), ForeignKey("reviews.id", ondelete="CASCADE"), primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    value = Column(SmallInteger, nullable=False)

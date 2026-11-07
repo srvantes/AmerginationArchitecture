@@ -8,16 +8,17 @@
  <link rel="preconnect" href="https://fonts.googleapis.com">
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Marck+Script&display=swap" rel="stylesheet">
- <link rel="stylesheet" href="/static/app.css?v=posters-1">
+ <link rel="stylesheet" href="/static/app.css?v=profile-shop-1">
  <script src="/static/app.js?v=direct-kodik-1" defer></script>
- <script src="/static/discussion.js?v=playback-history-1" defer></script>
+ <script src="/static/discussion.js?v=replies-sessions-1" defer></script>
  <script src="/static/playback-history.js?v=direct-kodik-1" defer></script>
  <script src="/static/watchlist.js?v=anime-urls-1" defer></script>
- <script src="/static/account.js?v=anime-urls-1" defer></script>
+ <script src="/static/account.js?v=profile-shop-1" defer></script>
+ <script src="/static/profile-shop.js?v=1" defer></script>
  <script src="/static/achievements.js?v=achievements-1" defer></script>
- <script src="/static/mini-profile.js?v=player-catalogs-1" defer></script>
+ <script src="/static/mini-profile.js?v=profile-shop-1" defer></script>
  <script src="/static/profile-editor.js?v=public-profiles-1" defer></script>
- <script src="/static/password-reset.js?v=password-recovery-5" defer></script>
+ <script src="/static/password-reset.js?v=replies-sessions-1" defer></script>
 </head>
 <body>
  <header class="site-header">
@@ -81,6 +82,7 @@
      <aside class="profile-side-column">
       <section class="profile-panel" aria-labelledby="profile-stats-heading"><h2 id="profile-stats-heading">Статистика</h2><div class="profile-stats"><div><strong id="profile-anime-count">—</strong><span>Аниме завершено</span></div><div><strong id="profile-episode-count">—</strong><span>Серий просмотрено</span></div><div><strong id="profile-review-count">—</strong><span>Рецензий написано</span></div></div></section>
       <section id="profile-account-panel" class="profile-panel profile-account" aria-labelledby="profile-account-heading"><h2 id="profile-account-heading">Аккаунт</h2><p id="profile-email"></p><p id="profile-verified" class="subtle"></p><p id="profile-joined" class="subtle"></p><a id="profile-public-link" class="secondary-button" hidden>Публичная страница ↗</a></section>
+      <button id="profile-shop-open" class="secondary-button" type="button" hidden>Магазин оформления</button>
      </aside>
     </div>
    </div>
@@ -100,6 +102,19 @@
  <dialog id="watchlist-dialog"><div class="dialog-heading"><h2>Мой список</h2><button class="icon-button close-dialog" aria-label="Закрыть выбор статуса">×</button></div><p id="watchlist-anime-title"></p><form id="watchlist-form" class="auth-stack"><label>Статус просмотра<select id="watchlist-select"></select></label><label>Просмотрено серий<input id="watchlist-progress" type="number" min="0" step="1" max="2147483647" required value="0"></label><p id="watchlist-progress-hint" class="subtle"></p><button id="watchlist-save" class="gold-button">Добавить</button></form><button id="watchlist-remove" class="secondary-button" hidden>Убрать из списка</button><p id="watchlist-dialog-status" class="subtle" role="status"></p></dialog>
  <dialog id="profile-editor-dialog" class="profile-editor-dialog" aria-labelledby="profile-editor-heading"><div class="dialog-heading"><h2 id="profile-editor-heading">Редактирование профиля</h2><button class="icon-button close-dialog" aria-label="Закрыть редактор профиля">×</button></div><form id="profile-editor-form" class="auth-stack"><div class="profile-avatar-editor"><div id="profile-editor-preview" class="account-avatar" aria-hidden="true"></div><label>Аватар<input id="profile-edit-avatar" type="file" accept="image/jpeg,image/png,image/webp"><span class="subtle">JPEG, PNG или WebP · до 2 МБ. Картинка будет обрезана до квадрата.</span></label></div><label>Отображаемое имя<input id="profile-edit-name" maxlength="100" autocomplete="nickname"><span class="subtle">Оставьте пустым, чтобы показывать имя пользователя.</span></label><label>Описание<textarea id="profile-edit-bio" maxlength="1000" rows="4" placeholder="Расскажите о себе"></textarea></label><label>Страна<input id="profile-edit-country" maxlength="100" autocomplete="country-name" placeholder="Например, Россия"></label><label class="profile-privacy"><input id="profile-edit-visibility" type="checkbox"><span>Показывать мой список аниме и статистику другим пользователям</span></label><p id="profile-editor-status" class="subtle" role="status"></p><button id="profile-editor-save" class="gold-button" type="submit">Сохранить изменения</button></form></dialog>
  <dialog id="achievement-dialog" class="achievement-dialog" aria-labelledby="achievement-dialog-title"><div class="dialog-heading"><h2 id="achievement-dialog-title">Достижения</h2><button class="icon-button close-dialog" aria-label="Закрыть достижения">×</button></div><p class="subtle">Выберите до четырёх полученных достижений. Выбранные награды видны всем, даже если список аниме скрыт.</p><form id="achievement-form" class="auth-stack"><div id="achievement-catalog" class="achievement-catalog"></div><p id="achievement-selection-count" class="subtle"></p><p id="achievement-save-status" class="subtle" role="status"></p><button id="achievement-save" class="gold-button" type="submit">Сохранить витрину</button></form></dialog>
+ <dialog id="profile-shop" aria-labelledby="profile-shop-heading">
+  <div class="dialog-heading"><h2 id="profile-shop-heading">Магазин оформления</h2><button class="icon-button close-dialog" aria-label="Закрыть магазин">×</button></div>
+  <p class="profile-shop-balance">Баланс <strong id="profile-shop-balance">—</strong> баллов</p>
+  <p class="subtle">Комментарий +5 · рецензия +100 · полученный лайк +10 за комментарий или +30 за рецензию</p>
+  <label class="profile-shop-kind">Категория<select id="profile-shop-kind"><option value="profile_theme">Темы</option><option value="profile_background">Фоны профиля</option><option value="mini_profile_background">Фоны мини-профиля</option></select></label>
+  <p id="profile-shop-status" class="subtle" role="status"></p>
+  <div id="profile-shop-items" class="profile-shop-items"></div>
+  <form id="profile-shop-upload" hidden>
+   <label>Свой фон <span class="subtle">JPEG, PNG, WebP до 2 МБ</span><input id="profile-shop-file" type="file" accept="image/jpeg,image/png,image/webp" required></label>
+   <button type="submit" class="secondary-button">Установить фон</button>
+  </form>
+  <button id="profile-shop-reset" type="button" class="secondary-button" hidden>Вернуть стандартное оформление</button>
+ </dialog>
  <div id="mini-profile-card" class="mini-profile-card" role="dialog" aria-labelledby="mini-profile-title" hidden><div class="mini-profile-cover"><img id="mini-profile-background" alt="" referrerpolicy="no-referrer" hidden></div><div class="mini-profile-content"><div id="mini-profile-avatar" class="account-avatar mini-profile-avatar" aria-hidden="true"></div><h3><a id="mini-profile-title"></a></h3><p id="mini-profile-username" class="subtle"></p><p id="mini-profile-country" class="subtle"></p><p id="mini-profile-bio"></p><div id="mini-profile-achievements" class="mini-profile-achievements"></div><p id="mini-profile-status" class="subtle" role="status"></p></div></div>
  <div id="toast" role="status" hidden></div>
 </body>

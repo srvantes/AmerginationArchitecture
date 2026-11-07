@@ -68,6 +68,8 @@ class UserProfile(Base):
     user = relationship("User", back_populates="profile")
     avatar_url = Column(String(255), default="/static/default_avatar.jpg")
     profile_background = Column(String(255), default="/static/default_background.jpg")
+    mini_profile_background = Column(String(255))
+    profile_theme = Column(String(40))
     status = Column(String(20), default="online", server_default="online", nullable=False)
     custom_url = Column(String(255), unique=True)
     nickname = Column(String(100))

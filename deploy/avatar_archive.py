@@ -1,4 +1,4 @@
-"""Stream and validate the flat, generated PNG avatar store inside the app container."""
+"""Stream and validate the flat profile media store inside the app container."""
 from __future__ import annotations
 
 import os
@@ -14,7 +14,7 @@ AVATAR_DIR = Path("/app/var/avatars")
 MAX_FILES = 100_000
 MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_TOTAL_BYTES = 10 * 1024 * 1024 * 1024
-FILENAME = re.compile(r"[a-z0-9-]{1,160}\.png\Z")
+FILENAME = re.compile(r"(?:[a-z0-9-]{1,160}\.png|bg-[a-z0-9-]{1,100}\.webp|shop-[a-z0-9-]{1,100}\.(?:gif|webp|jpg))\Z")
 
 
 class ArchiveError(ValueError):

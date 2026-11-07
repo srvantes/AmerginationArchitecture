@@ -38,15 +38,20 @@ def normalize_image(data: bytes) -> bytes:
         raise HTTPException(400, "Нужна статичная картинка JPEG, PNG или WebP до 4096 × 4096 пикселей.") from None
 
 
-async def read_image(request: Request) -> bytes:
+async def read_image_upload(request: Request, size_error: str) -> bytes:
     if request.headers.get("content-type", "").split(";", 1)[0].lower() not in ALLOWED_TYPES:
         raise HTTPException(415, "Поддерживаются JPEG, PNG и WebP.")
     data = bytearray()
     async for chunk in request.stream():
         if len(data) + len(chunk) > MAX_BYTES:
-            raise HTTPException(413, "Размер аватара не должен превышать 2 МБ.")
+            raise HTTPException(413, size_error)
         data.extend(chunk)
-    return await run_in_threadpool(normalize_image, bytes(data))
+    return bytes(data)
+
+
+async def read_image(request: Request) -> bytes:
+    data = await read_image_upload(request, "Размер аватара не должен превышать 2 МБ.")
+    return await run_in_threadpool(normalize_image, data)
 
 
 def remove_owned_avatar(url: str | None, user_id) -> None:

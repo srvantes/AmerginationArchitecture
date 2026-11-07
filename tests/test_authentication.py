@@ -6,7 +6,7 @@ from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 from backend.core.password import verify_password
-from backend.core.security import create_access_token
+from backend.core.security import WEB_SESSION_COOKIE, create_access_token, decode_access_token
 from backend.crud.user import crud_user
 from backend.database.models.user import User, UserProfile
 from tests.test_watchlist import DatabaseAPITestCase
@@ -17,6 +17,35 @@ class AuthenticationTests(DatabaseAPITestCase):
 
     def register(self, **changes):
         return self.client.post("/api/v1/auth/register", json={**self.payload, **changes})
+
+    def test_browser_cookie_renews_only_live_sessions_and_logout_revokes(self):
+        auth = "/api/v1/auth/"
+        headers = {"X-Amergination-Client": "web"}
+        data = {"username": "owner", "password": self.payload["password"]}
+        self.redis.expire.side_effect = lambda key, ttl: key in self.revoked
+        self.redis.delete.side_effect = self.revoked.discard
+        response = self.client.post(auth + "login", headers=headers, json=data)
+        self.assertEqual(response.status_code, 204, response.text)
+        self.assertEqual(response.content, b"")
+        self.assertIn("HttpOnly", response.headers["set-cookie"])
+        self.assertIn("SameSite=strict", response.headers["set-cookie"])
+        token = self.client.cookies.get(WEB_SESSION_COOKIE)
+        key = "web-session:" + decode_access_token(token)["jti"]
+        self.redis.setex.assert_awaited_with(key, 3600, "1")
+        self.assertEqual(self.client.get(auth + "me", headers=headers).status_code, 200)
+        self.assert_denied(self.client.get(auth + "me"))
+        self.assert_denied(self.client.get(auth + "me", headers={**headers, "X-Amergination-Account": str(self.other_id)}))
+        self.assertEqual(self.client.post(auth + "session", headers=headers).status_code, 204)
+        self.redis.expire.assert_awaited_once_with(key, 3600)
+        self.revoked.discard(key)
+        self.assert_denied(self.client.post(auth + "session", headers=headers))
+        self.assertNotIn(key, self.revoked)
+
+        self.assertEqual(self.client.post(auth + "login", headers=headers, json=data).status_code, 204)
+        token = self.client.cookies.get(WEB_SESSION_COOKIE)
+        self.assertEqual(self.client.post(auth + "logout", headers=headers).status_code, 204)
+        self.assertIsNone(self.client.cookies.get(WEB_SESSION_COOKIE))
+        self.assert_denied(self.client.get(auth + "me", headers={"Authorization": "Bearer " + token}))
 
     def assert_user_counts(self, count=2):
         with Session(self.engine) as session:

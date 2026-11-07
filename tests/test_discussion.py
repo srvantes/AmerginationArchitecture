@@ -49,6 +49,26 @@ class DiscussionTests(DatabaseAPITestCase):
         with Session(self.engine) as session:
             self.assertEqual(session.scalar(select(func.count()).select_from(CommentLike)), 0)
 
+    def test_replies_stay_in_their_title_and_survive_parent_removal(self):
+        parent = self.comment().json()
+        path = self.comment_path + parent["id"]
+        params = {"anime_source": "shikimori", "anime_external_id": "20"}
+        reply = {**params, "parent_id": parent["id"], "text": "Ответ", "has_spoilers": True}
+        self.assertEqual(self.client.post(self.comment_path, headers=self.other_headers,
+                                          json={**reply, "anime_external_id": "21"}).status_code, 422)
+        result = self.client.post(self.comment_path, headers=self.other_headers, json=reply)
+        self.assertEqual(result.status_code, 201, result.text)
+        child = result.json()
+        self.assertEqual(child["parent_id"], parent["id"])
+        feed = self.client.get(self.comment_path, params=params).json()
+        self.assertEqual(feed["total"], 1)
+        self.assertEqual(feed["items"][0]["reply_count"], 1)
+        self.assertEqual(self.client.get(path + "/replies").json()["items"][0]["id"], child["id"])
+        self.assertEqual(self.client.delete(path, headers=self.owner_headers).status_code, 204)
+        restored = self.client.get(self.comment_path, params=params).json()["items"]
+        self.assertEqual([item["id"] for item in restored], [child["id"]])
+        self.assertIsNone(restored[0]["parent_id"])
+
     def test_eleven_total_likes_unlock_permanently(self):
         ids = []
         for i in range(11):

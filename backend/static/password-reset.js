@@ -67,8 +67,8 @@ $('reset-password-form').addEventListener('submit', async event => {
  try {
   const data = await dsApi('auth/password/reset', {method:'POST', body:JSON.stringify({reset_token:prToken, new_password:$('reset-password').value})});
   if (version !== prVersion) return;
-  dsToken = null; dsUser = null; dsAccess = null; dsDrafts = {comments:null,reviews:null}; dsEditing = {comments:null,reviews:null};
-  sessionStorage.removeItem('amergination-token'); $('auth-password').value = ''; $('auth-username').value = '';
+  dsClearSession();
+  $('auth-password').value = ''; $('auth-username').value = '';
   dsRegister = false; $('auth-email-label').hidden = true; $('auth-email').required = false; $('auth-password').autocomplete = 'current-password';
   $('auth-submit').textContent = 'Войти'; $('auth-switch').textContent = 'Создать аккаунт';
   prReturn(); dsRenderForms(); $('auth-status').textContent = '';

@@ -75,6 +75,8 @@ class DatabaseAPITestCase(unittest.TestCase):
                 import_module("migrations.versions.0005_password_reset").upgrade()
                 import_module("migrations.versions.0006_watchlist_posters").upgrade()
                 import_module("migrations.versions.0007_achievements").upgrade()
+                import_module("migrations.versions.0011_discussion_replies_votes").upgrade()
+                import_module("migrations.versions.0012_profile_shop").upgrade()
         self.owner_id, self.other_id = uuid4(), uuid4()
         with Session(self.engine) as session:
             for user_id, name in [(self.owner_id, "owner"), (self.other_id, "other")]:

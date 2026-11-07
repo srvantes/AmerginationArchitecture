@@ -45,8 +45,13 @@ function accountAvatar(target, user) {
   image.addEventListener('error', () => image.remove()); target.append(image);
  }
 }
+function profileMediaSource(value) {
+ return typeof value === 'string' && /^\/media\/avatars\/(?:bg|shop)-[a-z0-9-]+\.(?:gif|webp|png|jpg)$/.test(value)
+  ? value : safeUrl(value);
+}
 function accountRender() {
  window.profileEditorAuthChanged?.();
+ window.profileShopAuthChanged?.();
  accountClose();
  $('open-auth').querySelector('.account-name').textContent = dsUser?.username || 'Войти';
  $('open-auth').setAttribute('aria-label', dsUser ? 'Меню пользователя ' + dsUser.username : 'Войти');
@@ -61,6 +66,7 @@ async function profileRefresh() {
  $('profile-watching').replaceChildren();
  for (const id of ['profile-anime-count','profile-episode-count','profile-review-count']) $(id).textContent = '—';
  $('profile-account-panel').hidden = true; $('profile-edit').hidden = true; $('profile-public-link').hidden = true;
+ $('profile-shop-open').hidden = true;
  $('profile-email').textContent = ''; $('profile-verified').textContent = '';
  $('profile-content').hidden = true; $('profile-login').hidden = true;
  if (!profileUserId && !dsUser) {
@@ -81,6 +87,7 @@ async function profileRefresh() {
  window.profileAchievementsChanged?.(window.profileAchievementTarget);
  $('profile-content').hidden = false; $('profile-status').textContent = '';
  $('profile-account-panel').hidden = !owner; $('profile-edit').hidden = !owner; $('profile-public-link').hidden = !owner;
+ $('profile-shop-open').hidden = !owner;
  $('profile-public-link').href = '/profile/' + encodeURIComponent(user.id);
  const canViewList = owner || profile.show_watchlist;
  for (const id of ['profile-list-link','profile-all-list']) { $(id).hidden = !canViewList; $(id).href = owner ? '/my-list' : '/profile/' + encodeURIComponent(user.id) + '/list'; }
@@ -91,7 +98,8 @@ async function profileRefresh() {
  $('profile-verified').textContent = owner ? (user.email_verified ? 'Почта подтверждена' : 'Почта не подтверждена') : '';
  $('profile-bio').textContent = profile.bio || 'Описание пока не добавлено.';
  $('profile-country').textContent = profile.country || ''; $('profile-country').hidden = !profile.country;
- const background = safeUrl(profile.profile_background);
+ $('profile-content').setAttribute('data-profile-theme', profile.profile_theme || '');
+ const background = profileMediaSource(profile.profile_background);
  $('profile-background-image').hidden = true;
  $('profile-background-image').removeAttribute('src');
  if (background) { $('profile-background-image').src = background; $('profile-background-image').hidden = false; }

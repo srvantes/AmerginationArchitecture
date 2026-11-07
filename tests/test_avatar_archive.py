@@ -69,6 +69,15 @@ class AvatarArchiveTests(unittest.TestCase):
         output.seek(0)
         self.assertEqual(archive.read_archive(output), [])
 
+    def test_snapshot_includes_uploaded_and_shop_backgrounds(self):
+        backgrounds = {"bg-owner-random.webp": b"background", "shop-stars.gif": b"animated background"}
+        for name, image in backgrounds.items():
+            (self.root / name).write_bytes(image)
+        output = io.BytesIO()
+        archive.backup(output)
+        output.seek(0)
+        self.assertEqual(archive.read_archive(output), sorted(backgrounds))
+
     def test_path_traversal_absolute_paths_nested_files_and_special_members_are_rejected(self):
         bad_names = ["/outside.png", "avatars/../outside.png", "avatars/a/evil.png", "avatars/..\\evil.png", "other/a.png"]
         for name in bad_names:

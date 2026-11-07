@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-function setup({restoring = false, eligibilityFails = false} = {}) {
+function setup({restoring = false, hasCookie = false, eligibilityFails = false} = {}) {
   const elements = new Map(), requests = [], storage = new Map();
   let verified = false;
   if (restoring) storage.set('amergination-token', 'pending-token');
@@ -25,8 +25,12 @@ function setup({restoring = false, eligibilityFails = false} = {}) {
       requests.push({url, options});
       let status = 200, data;
       if (url.endsWith('/auth/register')) { status = 201; data = {id: 'pending-id', email_verified: false}; }
-      else if (url.endsWith('/auth/login')) data = {access_token: 'pending-token'};
-      else if (url.endsWith('/auth/me')) data = {id: 'pending-id', username: 'newuser', email: 'newuser@example.com', email_verified: verified};
+      else if (url.endsWith('/auth/login')) { hasCookie = true; status = 204; }
+      else if (url.endsWith('/auth/me')) {
+        if (hasCookie || options.headers.Authorization) data = {id: 'pending-id', username: 'newuser', email: 'newuser@example.com', email_verified: verified};
+        else { status = 401; data = {detail: 'Sign in required'}; }
+      }
+      else if (url.endsWith('/auth/session')) status = 204;
       else if (url.endsWith('/auth/email/status')) data = {expires_in_seconds: 120, resend_after_seconds: 120, attempts_remaining: 5};
       else if (url.endsWith('/auth/email/verify')) { verified = true; data = {email_verified: true}; }
       else if (url.endsWith('/comments/eligibility')) {
@@ -59,6 +63,13 @@ async function main() {
   assert.equal(registration.element('open-auth').span.textContent, 'newuser');
   const verificationRequest = registration.requests.find(request => request.url.endsWith('/email/verify'));
   assert.equal(JSON.parse(verificationRequest.options.body).code, '000123');
+  assert.equal(verificationRequest.options.headers.Authorization, undefined);
+  assert.equal(verificationRequest.options.headers['X-Amergination-Account'], 'pending-id');
+
+  const browserSession = setup({hasCookie: true});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(browserSession.element('email-verification').hidden, false);
+  assert.ok(browserSession.requests.some(request => request.url.endsWith('/auth/session')));
 
   const restored = setup({restoring: true});
   await new Promise(resolve => setImmediate(resolve));

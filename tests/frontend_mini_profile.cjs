@@ -27,8 +27,10 @@ function setup({coarse=false,delayA=false}={}){
   text(tag,value,className){const node=element('node-'+elements.size);node.textContent=value;node.className=className;return node;},
   safeUrl(value){try{const u=new URL(value);return ['http:','https:'].includes(u.protocol)?u.href:null;}catch{return null;}},
   accountAvatar(target,user){target.textContent=user.username;},
-  async dsApi(path,options){requests.push({path,options});if(delayA&&path.includes('/a/'))await pendingA;const id=path.includes('/a/')?'a':'b';return {profile:{username:'user-'+id,nickname:'Демо '+id,bio:'Привет',country:'Россия',profile_background:'javascript:bad'},achievements:[{title:'На связи',description:'Подтвердить почту.'}]};},
+  async dsApi(path,options){requests.push({path,options});if(delayA&&path.includes('/a/'))await pendingA;const id=path.includes('/a/')?'a':'b';return {profile:{username:'user-'+id,nickname:'Демо '+id,bio:'Привет',country:'Россия',mini_profile_background:id==='a'?'javascript:bad':'/media/avatars/shop-stars.gif',profile_theme:id==='b'?'aurora':null},achievements:[{title:'На связи',description:'Подтвердить почту.'}]};},
  });
+ const account=fs.readFileSync('backend/static/account.js','utf8');
+ vm.runInContext(account.slice(account.indexOf('function profileMediaSource('),account.indexOf('function accountRender(')),context);
  vm.runInContext(fs.readFileSync('backend/static/mini-profile.js','utf8'),context);
  function flush(ms){for(const [id,timer] of [...timers])if(timer.ms<=ms){timers.delete(id);timer.handler();}}
  return {element,events,windowEvents,requests,a,b,flush,resolveA,context};
@@ -64,6 +66,9 @@ async function main(){
 
  const stale=setup({delayA:true});stale.a.focus();stale.b.focus();await tick();stale.resolveA();await tick();
  assert.equal(stale.element('mini-profile-title').textContent,'Демо b');
+ assert.equal(stale.element('mini-profile-background').src,'/media/avatars/shop-stars.gif');
+ assert.equal(stale.element('mini-profile-background').hidden,false);
+ assert.equal(stale.element('mini-profile-card').attributes['data-profile-theme'],'aurora');
  assert.equal(stale.requests[0].options.signal.aborted,true);
  stale.b.isConnected=false;stale.windowEvents.resize();assert.equal(stale.element('mini-profile-card').hidden,true);
  console.log('Mini profile UI: hover delay, pointer bridge, keyboard/Escape, touch, placement and stale responses OK');

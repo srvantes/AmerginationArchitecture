@@ -30,6 +30,7 @@ async function mpOpen(anchor, keyboard = false) {
  $('mini-profile-achievements').replaceChildren();$('mini-profile-avatar').replaceChildren();
  $('mini-profile-status').textContent='Загружаем профиль…';
  $('mini-profile-background').hidden=true;$('mini-profile-background').removeAttribute('src');
+ mpCard.removeAttribute('data-profile-theme');
  $('mini-profile-title').href='/profile/'+encodeURIComponent(userId);
  anchor.setAttribute('aria-expanded','true');mpCard.hidden=false;mpPosition();
  if(keyboard)$('mini-profile-title').focus({preventScroll:true});
@@ -42,7 +43,8 @@ async function mpOpen(anchor, keyboard = false) {
   $('mini-profile-country').textContent=profile.country || '';
   $('mini-profile-bio').textContent=profile.bio || 'Описание пока не добавлено.';
   accountAvatar($('mini-profile-avatar'),{username:profile.username,profile});
-  const background=safeUrl(profile.profile_background);
+  mpCard.setAttribute('data-profile-theme',profile.profile_theme || '');
+  const background=profileMediaSource(profile.mini_profile_background);
   if(background){$('mini-profile-background').src=background;$('mini-profile-background').hidden=false;}
   $('mini-profile-achievements').replaceChildren(...data.achievements.slice(0,4).map(item=>{
    const badge=text('span',item.title,'mini-profile-badge');badge.title=item.description;return badge;

@@ -54,3 +54,7 @@ class ReviewOut(BaseModel):
     author_name: str
     anime_rating: float | None
     date: datetime
+    likes_count: int = 0
+    dislikes_count: int = 0
+    liked_by_me: bool = False
+    disliked_by_me: bool = False

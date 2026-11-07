@@ -52,6 +52,8 @@ class UserProfile(BaseModel):
     id: UUID
     avatar_url: str | None = None
     profile_background: str | None = None
+    mini_profile_background: str | None = None
+    profile_theme: str | None = None
     status: str
     custom_url: str | None = None
     nickname: str | None = None
@@ -81,6 +83,8 @@ class PublicProfile(BaseModel):
     nickname: str | None = None
     avatar_url: str | None = None
     profile_background: str | None = None
+    mini_profile_background: str | None = None
+    profile_theme: str | None = None
     country: str | None = None
     bio: str | None = None
     created_at: datetime
@@ -119,7 +123,6 @@ class EmailCode(BaseModel):
 class UserProfileUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     avatar_url: str | None = Field(None, max_length=255)
-    profile_background: str | None = Field(None, max_length=255)
     status: str | None = Field(None, max_length=20)
     custom_url: str | None = Field(None, pattern=r"^[a-zA-Z0-9_-]+$", max_length=50)
     nickname: str | None = Field(None, max_length=100)

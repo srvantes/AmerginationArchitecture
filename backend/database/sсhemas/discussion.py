@@ -1,5 +1,6 @@
 import re
 from typing import Annotated, Literal
+from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 
 AnimeSource = Literal["shikimori", "animego", "kodik"]
@@ -33,3 +34,4 @@ class CommentUpdate(BaseModel):
 class CommentCreate(CommentUpdate):
     anime_source: AnimeSource
     anime_external_id: AnimeId
+    parent_id: UUID | None = None

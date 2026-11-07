@@ -39,7 +39,8 @@ async def sync_achievements(db, user_id):
         WatchlistEntry.user_id == user_id, WatchlistEntry.status == "completed"))
     reviews = await db.execute(select(func.count()).select_from(Review).where(Review.user_id == user_id))
     likes = await db.execute(select(func.count()).select_from(CommentLike).join(Comment,
-        Comment.id == CommentLike.comment_id).where(Comment.user_id == user_id, CommentLike.user_id != user_id))
+        Comment.id == CommentLike.comment_id).where(
+            Comment.user_id == user_id, CommentLike.user_id != user_id, CommentLike.value == 1))
     finished = completed.scalar_one()
     progress = {"email_verified": int(email.scalar_one() is not None), "first_anime": min(finished, 1),
                 "ten_anime": min(finished, 10), "first_review": min(reviews.scalar_one(), 1),

@@ -36,6 +36,7 @@ class PublicProfilesTests(DatabaseAPITestCase):
             self.assertEqual(response.status_code, 200, response.text)
             self.assertEqual(set(response.json()), {
                 "id", "username", "nickname", "avatar_url", "profile_background", "country", "bio", "created_at", "show_watchlist",
+                "mini_profile_background", "profile_theme",
             })
             self.assertEqual(response.json()["username"], "owner")
             self.assertEqual(response.headers["cache-control"], "private, no-store")
